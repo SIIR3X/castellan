@@ -1,0 +1,27 @@
+---
+# Play 1 - Bootstrap.
+#
+# Connects with the INITIAL credentials provided by the host, creates the
+# non-root admin user and deploys its SSH key. It does NOT touch sshd yet.
+# See docs/architecture.md (section 3).
+- name: "Castellan | Play 1 - Bootstrap (initial credentials)"
+  hosts: vps
+  gather_facts: false
+  become: true
+  vars:
+    # Connect as the host-provided account, on the initial port.
+    ansible_user: "{{ initial_user | default('root') }}"
+    ansible_port: "{{ initial_port | default(22) }}"
+
+  tasks:
+    - name: "Bootstrap | Phase 0 orchestration placeholder"
+      ansible.builtin.debug:
+        msg: >-
+          [bootstrap] Will create admin user '{{ admin_user | default('UNSET') }}',
+          deploy its SSH key and configure sudo
+          (sudo_mode={{ sudo_mode | default('nopasswd') }}).
+
+    # TODO Phase 1: replace the placeholder with the real roles, in order:
+    #   roles:
+    #     - backup_config
+    #     - accounts

@@ -1,0 +1,43 @@
+---
+# Play 3 - Harden.
+#
+# Applies all hardening roles as the new admin, in the mandatory anti-lockout
+# order: firewall -> fail2ban -> ssh -> everything else. sshd is reloaded ONCE,
+# through a handler flushed at the very end. See docs/architecture.md (section 3).
+- name: "Castellan | Play 3 - Harden"
+  hosts: vps
+  gather_facts: true
+  become: true
+  vars:
+    ansible_user: "{{ admin_user }}"
+    ansible_port: "{{ initial_port | default(22) }}"
+
+  tasks:
+    - name: "Harden | Phase 0 orchestration placeholder"
+      ansible.builtin.debug:
+        msg: >-
+          [harden] mode={{ castellan_mode | default('apply') }},
+          profile={{ hardening_profile | default('standard') }}.
+          Roles will run in lockout-safe order.
+
+    # TODO Phase 2+: enable the roles below in THIS exact order. Each role
+    # reads castellan_mode to switch between audit (read-only) and apply.
+    #   roles (lockout-critical first):
+    #     - firewall      # open the new SSH port BEFORE enabling ufw
+    #     - fail2ban      # ignoreip = your IP, before any ban can hit you
+    #     - ssh           # disable root/password, change port
+    #   then the low-risk roles:
+    #     - updates
+    #     - sysctl
+    #     - pam
+    #     - confinement
+    #     - filesystem
+    #     - services
+    #     - audit_logging
+    #     - integrity
+    #     - network
+    #     - cron
+    #     - boot
+    #
+    # - name: "harden | Reload sshd once, after all changes"
+    #   ansible.builtin.meta: flush_handlers

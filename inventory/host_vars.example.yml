@@ -1,0 +1,41 @@
+---
+# Castellan per-host configuration (template).
+#
+# Copy this file to inventory/host_vars/<host>.yml - the "./harden init <host>"
+# command does this for you - then adjust the values below.
+#
+# This file holds CONFIGURATION ONLY. Never put passwords or private keys here
+# (see docs/config.md for the secret-handling rules).
+
+# --- Initial connection (first contact with the VPS) ---
+target_ip:        203.0.113.42      # IP or FQDN of the server
+connection_mode:  root_password     # root_password | root_key | user_sudo
+initial_user:     root              # account used for the first connection
+initial_port:     22                # SSH port at first contact
+# initial_key:    ~/.ssh/hoster_key # only for connection_mode: root_key
+
+# --- Admin identity to create ---
+admin_user:        lucas
+admin_pubkey_file: files/public_keys/id_ed25519.pub
+sudo_mode:         nopasswd         # nopasswd (key only) | password (2nd factor)
+
+# --- SSH hardening ---
+ssh_port:          22               # new SSH port (open it in ufw first!)
+ssh_allow_groups:  [ssh-users]
+ssh_permit_root:   "no"
+ssh_password_auth: "no"
+
+# --- Firewall (ufw) ---
+ufw_allowed_ports:   []             # extra ports to open, e.g. [80, 443]
+ufw_rate_limit_ssh:  true
+# ufw_admin_source_ip: 198.51.100.10  # restrict admin access to one source IP
+
+# --- Fail2ban ---
+f2b_ignoreip:  []                   # trusted IPs never banned (add YOUR IP)
+f2b_maxretry:  3
+f2b_bantime:   1h
+
+# --- Global ---
+hardening_profile: standard         # minimal | standard | paranoid
+auto_reboot:       false
+# notify_email:    you@example.com

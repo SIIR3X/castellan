@@ -1,0 +1,4 @@
+---
+# This role is not published to Ansible Galaxy, so metadata is kept minimal.
+# backup_config is a cross-cutting helper (see README.md).
+dependencies: []

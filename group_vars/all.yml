@@ -1,0 +1,73 @@
+---
+# Castellan global defaults.
+#
+# These values apply to every host and are overridden by per-host files in
+# inventory/host_vars/<host>.yml. Keep secrets OUT of this file (see
+# docs/config.md); use Ansible Vault for anything sensitive.
+
+# ---------------------------------------------------------------------------
+# Run mode - set by the ./harden wrapper (audit | apply).
+# ---------------------------------------------------------------------------
+castellan_mode: apply
+
+# ---------------------------------------------------------------------------
+# Hardening profile - selects which measures run, by priority.
+#   minimal  : essential CRIT + IMP
+#   standard : CRIT + IMP + REC      (recommended default)
+#   paranoid : everything, including OPT
+# ---------------------------------------------------------------------------
+hardening_profile: standard
+
+# ---------------------------------------------------------------------------
+# Module toggles - enable/disable each role independently. Roles are added
+# incrementally across phases; a disabled (or not-yet-implemented) role is
+# simply skipped.
+# ---------------------------------------------------------------------------
+enable_accounts:      true
+enable_ssh:           true
+enable_mfa:           false
+enable_firewall:      true
+enable_fail2ban:      true
+enable_updates:       true
+enable_sysctl:        true
+enable_confinement:   false
+enable_filesystem:    true
+enable_services:      true
+enable_audit_logging: true
+enable_integrity:     false
+enable_pam:           true
+enable_network:       true
+enable_boot:          false
+enable_cron:          true
+enable_compliance:    true
+
+# ---------------------------------------------------------------------------
+# Sensible defaults (overridable per host).
+# ---------------------------------------------------------------------------
+# Access
+sudo_mode: nopasswd
+
+# SSH
+ssh_port:          22
+ssh_allow_groups:  [ssh-users]
+ssh_permit_root:   "no"
+ssh_password_auth: "no"
+
+# Firewall (ufw)
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+ufw_allowed_ports:    []
+ufw_rate_limit_ssh:   true
+
+# Fail2ban
+f2b_ignoreip: []
+f2b_maxretry: 3
+f2b_bantime:  1h
+f2b_findtime: 10m
+
+# Updates
+auto_reboot:      false
+auto_reboot_time: "02:00"
+
+# Backups (consumed by the backup_config role)
+castellan_backup_dir: /var/backups/castellan

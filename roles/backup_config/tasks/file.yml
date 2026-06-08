@@ -1,0 +1,42 @@
+---
+# backup_config (per file).
+#
+# Copies a single remote file into the run backup directory before it is
+# modified. Idempotent: files that do not exist are skipped.
+# Required var: backup_file (absolute path on the target).
+
+- name: "Backup config |Require the 'backup_file' variable"
+  ansible.builtin.assert:
+    that:
+      - backup_file is defined
+      - backup_file | length > 0
+    fail_msg: "backup_config/file requires the 'backup_file' variable."
+    quiet: true
+
+- name: "Backup config |Ensure the run backup directory exists"
+  ansible.builtin.file:
+    path: "{{ castellan_backup_dir }}/{{ castellan_backup_stamp | default('manual') }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: "Backup config |Stat {{ backup_file }}"
+  ansible.builtin.stat:
+    path: "{{ backup_file }}"
+  register: _castellan_backup_stat
+  become: true
+
+- name: "Backup config |Back up {{ backup_file }}"
+  ansible.builtin.copy:
+    src: "{{ backup_file }}"
+    dest: >-
+      {{ castellan_backup_dir }}/{{ castellan_backup_stamp | default('manual') }}/{{
+      backup_file | regex_replace('^/', '') | regex_replace('/', '_') }}
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  when: _castellan_backup_stat.stat.exists

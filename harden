@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# Castellan - agentless Linux hardening, driven by Ansible.
+# Thin wrapper around ansible-playbook. See docs/ for the design.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLAYBOOK="${REPO_ROOT}/playbooks/site.yml"
+HOST_VARS_DIR="${REPO_ROOT}/inventory/host_vars"
+EXAMPLE_VARS="${REPO_ROOT}/inventory/host_vars.example.yml"
+
+# ---- output helpers --------------------------------------------------------
+if [ -t 1 ]; then
+  C_RED='\033[0;31m'; C_GRN='\033[0;32m'; C_YEL='\033[0;33m'; C_BLU='\033[0;34m'; C_RST='\033[0m'
+else
+  C_RED=''; C_GRN=''; C_YEL=''; C_BLU=''; C_RST=''
+fi
+info() { printf '%b\n' "${C_BLU}[*]${C_RST} $*"; }
+ok()   { printf '%b\n' "${C_GRN}[+]${C_RST} $*"; }
+warn() { printf '%b\n' "${C_YEL}[!]${C_RST} $*" >&2; }
+die()  { printf '%b\n' "${C_RED}[x]${C_RST} $*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+Castellan - agentless Linux hardening, driven by Ansible.
+
+Usage:
+  ./harden init     <host>            Create a per-host config from the template
+  ./harden audit    <host> [args...]  Read-only compliance audit (no changes)
+  ./harden apply    <host> [args...]  Apply hardening
+  ./harden rollback <host>            Restore the last backup (Phase 4)
+  ./harden report   <host>            Show the latest report (Phase 3)
+  ./harden help                       Show this help
+
+Any extra args after <host> are passed straight to ansible-playbook, e.g.
+  ./harden apply 203.0.113.42 --ask-pass --tags ssh
+EOF
+}
+
+# ---- guards ----------------------------------------------------------------
+require_ansible() {
+  command -v ansible-playbook >/dev/null 2>&1 \
+    || die "ansible-playbook not found. Install Ansible on this control machine."
+}
+
+require_host() {
+  [ -n "${1:-}" ] || { usage; die "Missing <host> argument."; }
+}
+
+check_host_vars() {
+  if [ ! -f "${HOST_VARS_DIR}/$1.yml" ]; then
+    warn "No config found at inventory/host_vars/$1.yml"
+    warn "Create it with:  ./harden init $1"
+  fi
+}
+
+# ---- core ------------------------------------------------------------------
+run_playbook() {
+  # args: <host> <mode> [extra ansible-playbook args...]
+  local host="$1" mode="$2"; shift 2
+  local -a cmd=(ansible-playbook "$PLAYBOOK" --limit "$host" --extra-vars "castellan_mode=${mode}")
+  [ "$mode" = "audit" ] && cmd+=(--check --diff)
+  info "Running: ${cmd[*]} $*"
+  ( cd "$REPO_ROOT" && "${cmd[@]}" "$@" )
+}
+
+cmd_init() {
+  local host="$1" dest="${HOST_VARS_DIR}/$1.yml"
+  [ -f "$EXAMPLE_VARS" ] || die "Template not found: $EXAMPLE_VARS"
+  [ -f "$dest" ] && die "Config already exists: $dest (edit it, or remove it first)."
+  mkdir -p "$HOST_VARS_DIR"
+  sed "s|^target_ip:.*|target_ip:        ${host}|" "$EXAMPLE_VARS" > "$dest"
+  ok "Created ${dest}"
+  info "Next steps:"
+  info "  1. Edit ${dest} (admin_user, connection_mode, ssh_port, ...)."
+  info "  2. Add '${host}' under the 'vps' group in inventory/hosts.yml."
+  info "  3. Run:  ./harden audit ${host}"
+  warn "The full interactive wizard arrives in a later phase (see docs/config.md)."
+}
+
+cmd_report() {
+  local host="$1" latest
+  latest="$(ls -1dt "${REPO_ROOT}/reports/${host}_"* 2>/dev/null | head -n1 || true)"
+  if [ -n "$latest" ]; then
+    ok "Latest report: ${latest}"
+  else
+    warn "No report yet for ${host} (reporting lands in Phase 3)."
+  fi
+}
+
+# ---- dispatch --------------------------------------------------------------
+main() {
+  local subcmd="${1:-help}"
+  case "$subcmd" in
+    init)
+      require_host "${2:-}"; cmd_init "$2" ;;
+    audit)
+      require_ansible; require_host "${2:-}"
+      local host="$2"; shift 2
+      check_host_vars "$host"; run_playbook "$host" audit "$@" ;;
+    apply)
+      require_ansible; require_host "${2:-}"
+      local host="$2"; shift 2
+      check_host_vars "$host"; run_playbook "$host" apply "$@" ;;
+    rollback)
+      require_host "${2:-}"
+      warn "rollback is implemented in Phase 4 (see the roadmap)." ;;
+    report)
+      require_host "${2:-}"; cmd_report "$2" ;;
+    help|-h|--help)
+      usage ;;
+    *)
+      usage; die "Unknown command: ${subcmd}" ;;
+  esac
+}
+
+main "$@"
