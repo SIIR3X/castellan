@@ -1,11 +1,12 @@
-# === Secrets — NE JAMAIS committer ===========================================
-# Mot de passe / passphrase Ansible Vault
+# Secrets - NEVER commit
+
+# Ansible Vault password / passphrase
 .vault_pass
 *.vault_pass
 .vault-password*
 vault-password*
 
-# Clés privées SSH (ne doivent jamais entrer dans le dépôt)
+# SSH private keys (must never enter the repository)
 id_rsa
 id_ed25519
 id_ecdsa
@@ -13,28 +14,27 @@ id_ecdsa
 *.key
 files/private_keys/
 
-# Fichiers de secrets en clair éventuels (au cas où)
+# Possible plaintext secret files (just in case)
 secrets.yml
 secrets.yaml
 *.secret
 
-# === Ansible =================================================================
+# Ansible
 *.retry
 .ansible/
 fact_cache/
 
-# === Rapports générés ========================================================
-# Le dossier est suivi (.gitkeep) mais pas son contenu horodaté
+# Generated reports (folder tracked via .gitkeep, contents ignored)
 reports/*
 !reports/.gitkeep
 
-# === Python (ansible) ========================================================
+# Python (ansible)
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 
-# === Système / éditeurs ======================================================
+# System / editors
 .DS_Store
 Thumbs.db
 *.swp
