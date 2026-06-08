@@ -1,0 +1,24 @@
+---
+# Play 2 - Verify access (SAFETY NET).
+#
+# Reconnects as the NEW admin user (key-based) and confirms that sudo works.
+# If this play fails, hardening stops here and the original root/password
+# access is still intact - no lockout. See docs/architecture.md (section 3).
+- name: "Castellan | Play 2 - Verify new admin access"
+  hosts: vps
+  gather_facts: false
+  vars:
+    # New admin account. The port is still the initial one: the ssh role only
+    # changes it later, in Play 3.
+    ansible_user: "{{ admin_user }}"
+    ansible_port: "{{ initial_port | default(22) }}"
+
+  tasks:
+    - name: "Verify | Phase 0 orchestration placeholder"
+      ansible.builtin.debug:
+        msg: >-
+          [verify] Will open a fresh connection as '{{ admin_user | default('UNSET') }}'
+          and assert that 'sudo' succeeds before any destructive change.
+
+    # TODO Phase 1: connect as the new admin, run a become smoke test,
+    # and fail fast (end_play / assert) if it does not succeed.
