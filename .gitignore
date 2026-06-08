@@ -1,0 +1,44 @@
+# === Secrets — NE JAMAIS committer ===========================================
+# Mot de passe / passphrase Ansible Vault
+.vault_pass
+*.vault_pass
+.vault-password*
+vault-password*
+
+# Clés privées SSH (ne doivent jamais entrer dans le dépôt)
+id_rsa
+id_ed25519
+id_ecdsa
+*.pem
+*.key
+files/private_keys/
+
+# Fichiers de secrets en clair éventuels (au cas où)
+secrets.yml
+secrets.yaml
+*.secret
+
+# === Ansible =================================================================
+*.retry
+.ansible/
+fact_cache/
+
+# === Rapports générés ========================================================
+# Le dossier est suivi (.gitkeep) mais pas son contenu horodaté
+reports/*
+!reports/.gitkeep
+
+# === Python (ansible) ========================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# === Système / éditeurs ======================================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
