@@ -1,0 +1,4 @@
+---
+# fail2ban edits /etc/fail2ban/jail.local; it backs it up via backup_config
+# inside apply.yml rather than as a hard role dependency.
+dependencies: []

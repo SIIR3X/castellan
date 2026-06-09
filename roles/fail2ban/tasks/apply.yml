@@ -1,0 +1,38 @@
+---
+# fail2ban (apply) - install, configure jail.local and enable the service.
+#
+# Anti-lockout: f2b_ignoreip (5.6) is rendered before the service starts, so a
+# trusted admin source can never be banned. banaction=ufw keeps bans consistent
+# with the firewall role, which therefore runs first.
+
+- name: "Fail2ban | Ensure fail2ban is installed"
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: "Fail2ban | Back up jail.local before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: /etc/fail2ban/jail.local
+
+- name: "Fail2ban | Deploy jail.local"
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: "Fail2ban | Restart fail2ban"
+
+- name: "Fail2ban | Enable and start the service"
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started
+  become: true
