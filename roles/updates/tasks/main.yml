@@ -1,0 +1,11 @@
+---
+# updates - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit -> read-only checks; apply -> upgrade and enable unattended-upgrades.
+
+- name: "Updates | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Updates | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'
