@@ -1,0 +1,15 @@
+---
+# compliance role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 18. Runs the Lynis system audit as an
+# external, independent measure of the hardening (the "hardening index"), then
+# fetches a timestamped report to the control machine. Read-only on the target.
+
+# Install Lynis from apt if missing.
+compliance_lynis_install: true
+
+# Where to store fetched reports on the control machine (relative to repo root).
+compliance_report_dir: reports
+
+# Fetch the raw Lynis files (log + report data) alongside the summary.
+compliance_fetch: true

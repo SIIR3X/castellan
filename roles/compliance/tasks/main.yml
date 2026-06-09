@@ -1,0 +1,86 @@
+---
+# compliance - run Lynis and collect a timestamped report (section 18).
+# Read-only on the target; the report is rendered/fetched to the control machine.
+
+- name: "Compliance | Compute the report timestamp"
+  ansible.builtin.set_fact:
+    compliance_stamp: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+  when: compliance_stamp is not defined
+
+- name: "Compliance | Compute the local report path"
+  ansible.builtin.set_fact:
+    compliance_local_path: "{{ playbook_dir }}/../{{ compliance_report_dir }}/{{ inventory_hostname }}_{{ compliance_stamp }}"
+
+- name: "Compliance | Ensure Lynis is installed"
+  ansible.builtin.apt:
+    name: lynis
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: compliance_lynis_install | bool
+
+- name: "Compliance | Run the Lynis system audit (18.1)"
+  ansible.builtin.command: lynis audit system --quiet --no-colors
+  register: _compliance_run
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Compliance | Read the Lynis report data"
+  ansible.builtin.slurp:
+    src: /var/log/lynis-report.dat
+  register: _compliance_dat
+  become: true
+
+- name: "Compliance | Extract the hardening index"
+  ansible.builtin.set_fact:
+    compliance_hardening_index: >-
+      {{ (_compliance_dat.content | b64decode
+          | regex_findall('hardening_index=([0-9]+)') or ['unknown']) | first }}
+
+- name: "Compliance | Gather service facts (18.4)"
+  ansible.builtin.service_facts:
+  become: true
+
+- name: "Compliance | Read ufw status (oneshot service, check rules not state)"
+  ansible.builtin.command: ufw status
+  register: _compliance_ufw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Compliance | Create the local report directory"
+  ansible.builtin.file:
+    path: "{{ compliance_local_path }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: "Compliance | Fetch the Lynis report files (18.3)"
+  ansible.builtin.fetch:
+    src: "{{ item }}"
+    dest: "{{ compliance_local_path }}/"
+    flat: true
+  loop:
+    - /var/log/lynis.log
+    - /var/log/lynis-report.dat
+  become: true
+  when: compliance_fetch | bool
+
+- name: "Compliance | Render the local summary (18.3/18.4)"
+  ansible.builtin.template:
+    src: summary.md.j2
+    dest: "{{ compliance_local_path }}/summary.md"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: "Compliance | Show the hardening index"
+  ansible.builtin.debug:
+    msg: >-
+      [compliance] Lynis hardening index = {{ compliance_hardening_index }};
+      report saved under {{ compliance_report_dir }}/{{ inventory_hostname }}_{{ compliance_stamp }}/
