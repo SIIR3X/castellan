@@ -7,10 +7,17 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEY="${HERE}/secrets/id_test"
-PORT=2222
-ADMIN=castellan
+# Target defaults to the podman container; override for the VM, e.g.
+#   CASTELLAN_HOST=192.168.1.43 CASTELLAN_PORT=22 ./test/check.sh
+HOST="${CASTELLAN_HOST:-127.0.0.1}"
+PORT="${CASTELLAN_PORT:-2222}"
+ADMIN="${CASTELLAN_ADMIN:-castellan}"
+# Share a single SSH connection across all checks (ControlMaster), so the
+# rapid sequence does not trip ufw's SSH rate-limit (limit = 6 conns / 30s).
 SSH=(ssh -p "${PORT}" -i "${KEY}" -o StrictHostKeyChecking=accept-new
-     -o UserKnownHostsFile=/dev/null "${ADMIN}@127.0.0.1")
+     -o UserKnownHostsFile=/dev/null
+     -o ControlMaster=auto -o ControlPersist=30s
+     -o ControlPath="/tmp/castellan-check-%r@%h:%p" "${ADMIN}@${HOST}")
 
 fail=0
 check() {
@@ -24,7 +31,7 @@ check() {
   fi
 }
 
-echo "== Effectiveness checks (as ${ADMIN}) =="
+echo "== Effectiveness checks (as ${ADMIN}@${HOST}:${PORT}) =="
 check "admin can log in (whoami)"        "${ADMIN}" 'whoami'
 check "sudo escalates to root (uid 0)"   "0"        'sudo id -u'
 check "member of sudo group"             "yes"      'id -nG | grep -qw sudo && echo yes || echo no'
