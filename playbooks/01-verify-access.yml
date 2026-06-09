@@ -2,8 +2,13 @@
 # Play 2 - Verify access (SAFETY NET).
 #
 # Reconnects as the NEW admin user (key-based) and confirms that sudo works.
-# If this play fails, hardening stops here and the original root/password
-# access is still intact - no lockout. See docs/architecture.md (section 3).
+# If this play fails in apply mode, hardening stops here and the original
+# root/password access is still intact - no lockout. See docs/architecture.md
+# (section 3).
+#
+# In audit mode the admin may not exist yet (no apply has run), so a failure is
+# downgraded to a notice and the host is skipped for this play only; the later
+# read-only audit play still runs.
 - name: "Castellan | Play 2 - Verify new admin access"
   hosts: vps
   gather_facts: false
@@ -14,11 +19,50 @@
     ansible_port: "{{ initial_port | default(22) }}"
 
   tasks:
-    - name: "Verify | Phase 0 orchestration placeholder"
-      ansible.builtin.debug:
-        msg: >-
-          [verify] Will open a fresh connection as '{{ admin_user | default('UNSET') }}'
-          and assert that 'sudo' succeeds before any destructive change.
+    - name: "Verify access | Reconnect as the new admin and confirm sudo"
+      block:
+        - name: "Verify access | Confirm SSH login as '{{ admin_user }}'"
+          ansible.builtin.ping:
+          register: _verify_ping
+          ignore_unreachable: true
 
-    # TODO Phase 1: connect as the new admin, run a become smoke test,
-    # and fail fast (end_play / assert) if it does not succeed.
+        - name: "Verify access | Assert the host is reachable as the admin"
+          ansible.builtin.assert:
+            that:
+              - _verify_ping.unreachable is not defined or not _verify_ping.unreachable
+            fail_msg: "Cannot open an SSH session as '{{ admin_user }}'."
+            quiet: true
+
+        - name: "Verify access | Run a sudo smoke test (id -u)"
+          ansible.builtin.command: id -u
+          become: true
+          changed_when: false
+          register: _verify_uid
+
+        - name: "Verify access | Assert sudo escalated to root (uid 0)"
+          ansible.builtin.assert:
+            that:
+              - (_verify_uid.stdout | trim) == '0'
+            fail_msg: "sudo did not escalate to root for '{{ admin_user }}'."
+            success_msg: "OK: '{{ admin_user }}' can log in and use sudo."
+            quiet: true
+
+      rescue:
+        - name: "Verify access | Abort: new access is not usable (apply mode)"
+          ansible.builtin.fail:
+            msg: >-
+              Could not reconnect as '{{ admin_user }}' with working sudo.
+              Aborting before any destructive change; the original root/password
+              access is still intact (no lockout).
+          when: castellan_mode | default('apply') != 'audit'
+
+        - name: "Verify access | Notice: admin not reachable yet (audit mode)"
+          ansible.builtin.debug:
+            msg: >-
+              [audit] '{{ admin_user }}' is not reachable with sudo yet. Run
+              './harden apply' to create it. Skipping this host for Play 2 only.
+          when: castellan_mode | default('apply') == 'audit'
+
+        - name: "Verify access | Skip this host for the rest of Play 2"
+          ansible.builtin.meta: end_host
+          when: castellan_mode | default('apply') == 'audit'

@@ -13,15 +13,11 @@
     ansible_user: "{{ initial_user | default('root') }}"
     ansible_port: "{{ initial_port | default(22) }}"
 
-  tasks:
-    - name: "Bootstrap | Phase 0 orchestration placeholder"
-      ansible.builtin.debug:
-        msg: >-
-          [bootstrap] Will create admin user '{{ admin_user | default('UNSET') }}',
-          deploy its SSH key and configure sudo
-          (sudo_mode={{ sudo_mode | default('nopasswd') }}).
+  roles:
+    # Establish the run-wide backup timestamp/directory first.
+    - role: backup_config
 
-    # TODO Phase 1: replace the placeholder with the real roles, in order:
-    #   roles:
-    #     - backup_config
-    #     - accounts
+    # Create the admin user, its groups, SSH key and sudoers drop-in.
+    # sshd is left untouched here; the ssh role hardens it in Play 3.
+    - role: accounts
+      when: enable_accounts | default(true)

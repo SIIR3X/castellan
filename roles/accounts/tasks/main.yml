@@ -1,0 +1,22 @@
+---
+# accounts - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit  -> read-only checks (audit.yml)
+# apply  -> create the admin identity and sudo access (apply.yml)
+
+- name: "Accounts | Validate required variables"
+  ansible.builtin.assert:
+    that:
+      - admin_user | length > 0
+      - admin_pubkey_file | length > 0
+    fail_msg: >-
+      accounts requires 'admin_user' and 'admin_pubkey_file'
+      (set them in inventory/host_vars/<host>.yml).
+    quiet: true
+
+- name: "Accounts | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Accounts | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'
