@@ -1,0 +1,26 @@
+---
+# fail2ban role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 5. Anti-lockout: trusted sources go
+# in f2b_ignoreip (5.6) so the admin can never ban themselves. Config lives in
+# /etc/fail2ban/jail.local; jail.conf is never edited.
+
+# 5.6 - trusted IPs/CIDRs never banned (loopback is always added on top).
+f2b_ignoreip: []
+
+# 5.3 - ban threshold.
+f2b_maxretry: 3
+f2b_findtime: 10m
+
+# 5.4 - ban duration with progressive increment.
+f2b_bantime: 1h
+f2b_bantime_increment: true
+
+# 5.5 - read auth events from journald.
+f2b_backend: systemd
+
+# 5.7 - ban via ufw, consistent with the firewall role.
+f2b_banaction: ufw
+
+# SSH port watched by the [sshd] jail (mirrors the ssh role / group_vars).
+ssh_port: 22

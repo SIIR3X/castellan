@@ -1,0 +1,22 @@
+# Managed by Castellan - do not edit by hand (jail.conf is left untouched).
+[DEFAULT]
+# 5.5 - read auth events from journald.
+backend = {{ f2b_backend }}
+
+# 5.6 - never ban these (loopback is always included).
+ignoreip = 127.0.0.1/8 ::1{% for ip in f2b_ignoreip %} {{ ip }}{% endfor %}
+
+
+# 5.3 / 5.4 - thresholds and progressive ban.
+maxretry = {{ f2b_maxretry }}
+findtime = {{ f2b_findtime }}
+bantime = {{ f2b_bantime }}
+bantime.increment = {{ 'true' if f2b_bantime_increment | bool else 'false' }}
+
+# 5.7 - ban through ufw, consistent with the firewall role.
+banaction = {{ f2b_banaction }}
+
+# 5.2 - SSH jail on the configured port.
+[sshd]
+enabled = true
+port = {{ ssh_port }}

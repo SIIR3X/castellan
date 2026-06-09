@@ -1,0 +1,37 @@
+---
+# fail2ban (audit) - read-only checks. Reports deviations mapped to
+# docs/security-measures.md section 5; never changes the host.
+
+- name: "Fail2ban | Check whether fail2ban is installed"
+  ansible.builtin.command: which fail2ban-client
+  register: _fail2ban_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Fail2ban | Gather service facts"
+  ansible.builtin.service_facts:
+  become: true
+
+- name: "Fail2ban | Check the sshd jail"
+  ansible.builtin.command: fail2ban-client status sshd
+  register: _fail2ban_sshd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  when: _fail2ban_installed.rc == 0
+
+- name: "Fail2ban | Report compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        5.1 fail2ban installed:
+        {{ 'ok' if _fail2ban_installed.rc == 0 else 'FAIL' }}
+      - >-
+        5.1 service active:
+        {{ 'ok' if ((ansible_facts.services['fail2ban.service'].state | default('')) == 'running') else 'FAIL' }}
+      - >-
+        5.2 sshd jail present:
+        {{ 'ok' if ((_fail2ban_sshd.rc | default(1)) == 0) else 'FAIL' }}
