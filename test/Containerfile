@@ -1,0 +1,22 @@
+# Disposable Castellan test target: a minimal Ubuntu running ONLY sshd.
+#
+# Root is reachable by key only (PermitRootLogin prohibit-password), which maps
+# to host_vars connection_mode: root_key. This image has no systemd, so it is
+# enough for the accounts/ssh/backup roles but NOT for ufw/fail2ban (those need
+# the systemd target documented in test/README.md).
+FROM docker.io/library/ubuntu:24.04
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        openssh-server sudo python3 iproute2 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /run/sshd /root/.ssh \
+    && chmod 700 /root/.ssh \
+    && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+
+# The test public key is injected at build time (context = test/).
+COPY secrets/id_test.pub /root/.ssh/authorized_keys
+RUN chmod 600 /root/.ssh/authorized_keys
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D", "-e"]
