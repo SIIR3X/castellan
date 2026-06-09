@@ -1,0 +1,27 @@
+---
+# ssh (audit) - read-only checks on the EFFECTIVE sshd config (sshd -T).
+# Reports deviations mapped to docs/security-measures.md section 2.
+
+- name: "Ssh | Dump the effective sshd configuration"
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: _ssh_effective
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Ssh | Report compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        2.1 password auth disabled:
+        {{ 'ok' if ('passwordauthentication no' in (_ssh_effective.stdout | default(''))) else 'FAIL' }}
+      - >-
+        2.2 root login disabled:
+        {{ 'ok' if ('permitrootlogin no' in (_ssh_effective.stdout | default(''))) else 'FAIL' }}
+      - >-
+        2.5 access restricted by group:
+        {{ 'ok' if ('allowgroups ' in (_ssh_effective.stdout | default(''))) else 'FAIL' }}
+      - >-
+        2.4 keyboard-interactive disabled:
+        {{ 'ok' if ('kbdinteractiveauthentication no' in (_ssh_effective.stdout | default(''))) else 'FAIL' }}

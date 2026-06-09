@@ -1,0 +1,44 @@
+---
+# ssh (apply) - harden sshd via a validated drop-in, reload once at play end.
+#
+# Anti-lockout: this runs only after Play 2 confirmed key+sudo access for the
+# admin, after the firewall already allowed the SSH port, and AllowGroups always
+# contains the admin's group. The config is validated (sshd -t) before being put
+# in place, and applied with a RELOAD (not restart) flushed at the very end.
+
+- name: "Ssh | Warn that port change is deferred under socket activation"
+  ansible.builtin.debug:
+    msg: >-
+      [ssh] ssh_port={{ ssh_port }} but the port is left unchanged: Ubuntu uses
+      ssh.socket (socket activation), so changing it needs separate handling
+      (deferred, measure 2.6 is OPT). SSH stays on its current port.
+  when: ssh_port | int != 22
+
+- name: "Ssh | Back up sshd configuration before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/ssh/sshd_config
+    - /etc/ssh/sshd_config.d/00-castellan-hardening.conf
+
+- name: "Ssh | Deploy the hardening drop-in (validated)"
+  ansible.builtin.template:
+    src: 00-castellan-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-castellan-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/sshd -t -f %s"
+  become: true
+  notify: "Ssh | Reload sshd"
+
+- name: "Ssh | Enforce strict permissions on sshd_config (2.19)"
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
