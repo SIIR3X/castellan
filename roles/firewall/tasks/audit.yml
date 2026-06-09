@@ -1,0 +1,36 @@
+---
+# firewall (audit) - read-only ufw checks. Reports deviations mapped to
+# docs/security-measures.md section 4; never changes the host.
+
+- name: "Firewall | Check whether ufw is installed"
+  ansible.builtin.command: which ufw
+  register: _firewall_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Firewall | Read ufw status"
+  ansible.builtin.command: ufw status verbose
+  register: _firewall_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  when: _firewall_installed.rc == 0
+
+- name: "Firewall | Report firewall compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        ufw installed:
+        {{ 'ok' if _firewall_installed.rc == 0 else 'FAIL' }}
+      - >-
+        ufw active:
+        {{ 'ok' if ('Status: active' in (_firewall_status.stdout | default(''))) else 'FAIL' }}
+      - >-
+        4.1 default deny incoming:
+        {{ 'ok' if ('deny (incoming)' in (_firewall_status.stdout | default(''))) else 'FAIL' }}
+      - >-
+        4.3 SSH port {{ ssh_port }} present in rules:
+        {{ 'ok' if ((ssh_port | string) in (_firewall_status.stdout | default(''))) else 'FAIL' }}
