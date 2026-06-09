@@ -19,7 +19,7 @@ them, so that `./harden rollback` can later restore them.
     name: backup_config
     tasks_from: file
   vars:
-    backup_file: /etc/ssh/sshd_config
+    backup_config_file: /etc/ssh/sshd_config
 ```
 
 ## Variables
@@ -28,4 +28,4 @@ them, so that `./harden rollback` can later restore them.
 |----------|---------|-------------|
 | `castellan_backup_dir` | `/var/backups/castellan` | Base backup directory on the target. |
 | `castellan_backup_stamp` | computed per run | Timestamp subfolder; set once per play by `tasks/main.yml`. |
-| `backup_file` | (required by `file.yml`) | Absolute path of the file to back up. |
+| `backup_config_file` | (required by `file.yml`) | Absolute path of the file to back up. |
