@@ -37,6 +37,7 @@
           ansible.builtin.command: id -u
           become: true
           changed_when: false
+          check_mode: false
           register: _verify_uid
 
         - name: "Verify access | Assert sudo escalated to root (uid 0)"
