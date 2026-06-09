@@ -12,32 +12,39 @@
     ansible_user: "{{ admin_user }}"
     ansible_port: "{{ initial_port | default(22) }}"
 
-  tasks:
-    - name: "Harden | Phase 0 orchestration placeholder"
+  pre_tasks:
+    - name: "Harden | Announce run parameters"
       ansible.builtin.debug:
         msg: >-
           [harden] mode={{ castellan_mode | default('apply') }},
           profile={{ hardening_profile | default('standard') }}.
-          Roles will run in lockout-safe order.
+          Roles run in lockout-safe order.
 
-    # TODO Phase 2+: enable the roles below in THIS exact order. Each role
-    # reads castellan_mode to switch between audit (read-only) and apply.
-    #   roles (lockout-critical first):
-    #     - firewall      # open the new SSH port BEFORE enabling ufw
-    #     - fail2ban      # ignoreip = your IP, before any ban can hit you
-    #     - ssh           # disable root/password, change port
-    #   then the low-risk roles:
-    #     - updates
-    #     - sysctl
-    #     - pam
-    #     - confinement
-    #     - filesystem
-    #     - services
-    #     - audit_logging
-    #     - integrity
-    #     - network
-    #     - cron
-    #     - boot
-    #
-    # - name: "harden | Reload sshd once, after all changes"
-    #   ansible.builtin.meta: flush_handlers
+  roles:
+    # Lockout-critical first. Each role reads castellan_mode to switch between
+    # audit (read-only) and apply.
+    - role: firewall      # open the SSH port BEFORE enabling ufw
+      when: enable_firewall | default(true)
+      tags: [firewall]
+
+    - role: fail2ban      # ignoreip = your IP, before any ban can hit you
+      when: enable_fail2ban | default(true)
+      tags: [fail2ban]
+
+    - role: ssh           # disable root/password, harden crypto (reload at end)
+      when: enable_ssh | default(true)
+      tags: [ssh]
+
+    - role: updates       # patch + enable unattended security updates
+      when: enable_updates | default(true)
+      tags: [updates]
+
+    # TODO next: low-risk roles
+    #   - sysctl, pam, confinement, filesystem, services,
+    #     audit_logging, integrity, network, cron, boot
+
+  post_tasks:
+    # Flush handlers explicitly so sshd is reloaded ONCE, after every role's
+    # change is in place (anti-lockout: never reload sshd mid-play).
+    - name: "Harden | Reload services once, at the very end"
+      ansible.builtin.meta: flush_handlers
