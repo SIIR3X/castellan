@@ -8,8 +8,10 @@ them, so that `./harden rollback` can later restore them.
 - `tasks/main.yml` (setup): creates a single timestamped backup directory for
   the run, under `castellan_backup_dir` (default `/var/backups/castellan`).
 - `tasks/file.yml` (per file): copies one remote file into that directory,
-  flattening its path (e.g. `/etc/ssh/sshd_config` becomes
-  `etc_ssh_sshd_config`). Missing files are skipped.
+  preserving its full path (e.g. `/etc/ssh/sshd_config` is stored at
+  `<dir>/etc/ssh/sshd_config`), and records `"<path>|<existed>"` in the run
+  `MANIFEST`. Missing files are not copied but are still recorded
+  (existed=False), so rollback can remove files hardening newly created.
 
 ## Usage from another role
 
