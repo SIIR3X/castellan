@@ -1,0 +1,39 @@
+---
+# updates (audit) - read-only checks. Reports deviations mapped to
+# docs/security-measures.md section 6; never changes the host.
+
+- name: "Updates | Check unattended-upgrades is installed"
+  ansible.builtin.command: which unattended-upgrade
+  register: _updates_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | Read the effective periodic setting"
+  ansible.builtin.command: apt-config dump APT::Periodic::Unattended-Upgrade
+  register: _updates_periodic
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | List third-party apt sources (6.7)"
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    patterns: ["*.list", "*.sources"]
+  register: _updates_repos
+  become: true
+
+- name: "Updates | Report compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        6.2 unattended-upgrades installed:
+        {{ 'ok' if _updates_installed.rc == 0 else 'FAIL' }}
+      - >-
+        6.2 periodic unattended-upgrade enabled:
+        {{ 'ok' if ('1' in (_updates_periodic.stdout | default(''))) else 'FAIL' }}
+      - >-
+        6.7 third-party apt sources present:
+        {{ _updates_repos.matched | default(0) }}

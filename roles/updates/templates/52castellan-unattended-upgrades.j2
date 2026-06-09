@@ -1,0 +1,11 @@
+// Managed by Castellan - overrides 50unattended-upgrades (higher number wins).
+// Security origins (6.3) are kept from the distro default 50unattended-upgrades.
+
+// 6.4 - reboot for kernel updates, within a window.
+Unattended-Upgrade::Automatic-Reboot "{{ 'true' if auto_reboot | bool else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ auto_reboot_time }}";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "{{ 'true' if updates_auto_reboot_with_users | bool else 'false' }}";
+
+// 6.5 - clean up obsolete packages and old kernels.
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ 'true' if updates_remove_unused | bool else 'false' }}";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ 'true' if updates_remove_unused | bool else 'false' }}";
