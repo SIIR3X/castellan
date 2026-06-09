@@ -1,0 +1,8 @@
+---
+# Reload (not restart) keeps existing sessions alive. Flushed at the end of the
+# harden play, so sshd is reloaded ONCE after every change is in place.
+- name: "Ssh | Reload sshd"
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+  become: true

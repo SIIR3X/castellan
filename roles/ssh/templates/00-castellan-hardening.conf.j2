@@ -1,0 +1,45 @@
+# Managed by Castellan - SSH hardening (sshd_config drop-in).
+# Named 00- so it is read before 50-cloud-init.conf; sshd uses the first
+# obtained value for each directive, so these win. Do not edit by hand.
+
+# 2.1 - key-based authentication only.
+PubkeyAuthentication yes
+PasswordAuthentication {{ ssh_password_auth }}
+
+# 2.2 / 2.3 - no root login, no empty passwords.
+PermitRootLogin {{ ssh_permit_root }}
+PermitEmptyPasswords no
+
+# 2.4 - no keyboard-interactive / challenge-response.
+KbdInteractiveAuthentication no
+
+# 2.5 - restrict access to specific groups.
+AllowGroups {{ ssh_allow_groups | join(' ') }}
+
+# 2.7 - limit attempts and sessions.
+MaxAuthTries {{ ssh_max_auth_tries }}
+MaxSessions {{ ssh_max_sessions }}
+LoginGraceTime {{ ssh_login_grace_time }}
+
+# 2.10 - disable rhosts and host-based auth.
+IgnoreRhosts yes
+HostbasedAuthentication no
+
+# 2.8 / 2.9 - disable X11 and forwarding.
+X11Forwarding {{ ssh_x11_forwarding }}
+AllowAgentForwarding {{ ssh_allow_agent_forwarding }}
+AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
+
+# 2.13 - drop dead sessions.
+ClientAliveInterval {{ ssh_client_alive_interval }}
+ClientAliveCountMax {{ ssh_client_alive_count_max }}
+
+# 2.15 / 2.16 / 2.20 - misc hardening.
+PermitUserEnvironment no
+StrictModes yes
+UseDNS {{ ssh_use_dns }}
+
+# 2.11 - strong crypto only (modern OpenSSH algorithms).
+KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
