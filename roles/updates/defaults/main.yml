@@ -1,0 +1,17 @@
+---
+# updates role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 6. Not lockout-critical, but a
+# kernel auto-reboot is disabled by default (auto_reboot) so a server never
+# reboots unexpectedly during a hardening run.
+
+# 6.1 - bring the system fully up to date on first apply.
+updates_full_upgrade: true
+
+# 6.4 - automatic reboot for kernel updates, within a time window.
+auto_reboot: false
+auto_reboot_time: "02:00"
+updates_auto_reboot_with_users: false
+
+# 6.5 - clean up obsolete packages and old kernels.
+updates_remove_unused: true
