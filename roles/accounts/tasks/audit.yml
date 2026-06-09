@@ -1,0 +1,38 @@
+---
+# accounts (audit) - read-only checks for the admin identity and sudo setup.
+# Reports deviations mapped to docs/security-measures.md; never changes the host.
+
+- name: "Accounts | Look up the admin user in passwd"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ admin_user }}"
+    fail_key: false
+  register: _accounts_passwd
+  become: true
+
+- name: "Accounts | List the admin group membership"
+  ansible.builtin.command: "id -nG {{ admin_user }}"
+  register: _accounts_groups
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Accounts | Stat the sudoers drop-in"
+  ansible.builtin.stat:
+    path: "/etc/sudoers.d/castellan-{{ admin_user }}"
+  register: _accounts_sudoers
+  become: true
+
+- name: "Accounts | Report account compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        1.1 admin user '{{ admin_user }}' present:
+        {{ 'ok' if ((_accounts_passwd.ansible_facts.getent_passwd[admin_user] | default([], true) | length) > 0) else 'FAIL' }}
+      - >-
+        1.3 admin in sudo group:
+        {{ 'ok' if ('sudo' in (_accounts_groups.stdout | default('') | split())) else 'FAIL' }}
+      - >-
+        sudoers drop-in present:
+        {{ 'ok' if _accounts_sudoers.stat.exists else 'absent' }}

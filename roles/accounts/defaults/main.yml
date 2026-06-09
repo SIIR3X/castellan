@@ -1,0 +1,26 @@
+---
+# accounts role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 1 (Accounts & authentication). For
+# the safety spine we focus on 1.1 (create admin), 1.3 (sudo) and key delivery;
+# deeper account hardening (1.8-1.14) lands in a later iteration.
+
+# Admin identity. admin_user and admin_pubkey_file are REQUIRED and normally
+# come from inventory/host_vars/<host>.yml; there is no safe default username.
+admin_user: ""
+admin_pubkey_file: ""
+
+# Login shell and any extra supplementary groups for the admin account. The
+# admin is always added to the sudo group and to every group in
+# ssh_allow_groups, so the later ssh role (AllowGroups) can never lock it out.
+admin_shell: /bin/bash
+admin_extra_groups: []
+
+# sudo behaviour:
+#   nopasswd : key-only automation account, passwordless sudo drop-in
+#   password : sudo requires the account password (provisioned via Vault)
+sudo_mode: nopasswd
+
+# SSH access group(s). Mirrors ssh_allow_groups (group_vars) so membership is
+# guaranteed before sshd is hardened. Kept here as a standalone-run fallback.
+ssh_allow_groups: [ssh-users]
