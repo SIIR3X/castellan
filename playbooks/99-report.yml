@@ -12,9 +12,7 @@
     # By this point the ssh role may have changed the port, so prefer ssh_port.
     ansible_port: "{{ ssh_port | default(initial_port | default(22)) }}"
 
-  tasks:
-    - name: "Report | Phase 0 orchestration placeholder"
-      ansible.builtin.debug:
-        msg: "[report] Will run Lynis and fetch results into reports/<host>_<date>/."
-
-    # TODO Phase 3: role 'compliance' (Lynis scan + report rendering + fetch).
+  roles:
+    - role: compliance    # Lynis scan + hardening index + timestamped report
+      when: enable_compliance | default(true)
+      tags: [compliance, report]
