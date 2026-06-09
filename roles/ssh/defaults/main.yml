@@ -1,0 +1,32 @@
+---
+# ssh role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 2. Lockout-critical (HIGH): root and
+# password auth are only disabled here because Play 2 already proved key+sudo
+# access for the admin, and AllowGroups always includes the admin's group.
+# sshd is reloaded ONCE via a handler flushed at the end of the harden play.
+#
+# Config is written as a drop-in named to sort BEFORE 50-cloud-init.conf, so its
+# values win (sshd uses the first obtained value for each directive).
+
+ssh_port: 22
+ssh_allow_groups: [ssh-users]
+
+# 2.1 / 2.2 - key-only, no root.
+ssh_password_auth: "no"
+ssh_permit_root: "no"
+
+# 2.7 - limit attempts and sessions.
+ssh_max_auth_tries: 3
+ssh_max_sessions: 4
+ssh_login_grace_time: 30
+
+# 2.13 - drop dead sessions.
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 2
+
+# 2.8 / 2.9 / 2.20 - disable forwarding and reverse DNS.
+ssh_x11_forwarding: "no"
+ssh_allow_agent_forwarding: "no"
+ssh_allow_tcp_forwarding: "no"
+ssh_use_dns: "no"
