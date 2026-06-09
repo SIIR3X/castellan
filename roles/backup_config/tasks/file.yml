@@ -1,11 +1,13 @@
 ---
 # backup_config (per file).
 #
-# Copies a single remote file into the run backup directory before it is
-# modified. Idempotent: files that do not exist are skipped.
+# Backs up a single remote file into the run backup directory BEFORE it is
+# modified, preserving its full path so rollback can restore it unambiguously.
+# Every call is also recorded in the run MANIFEST as "<path>|<existed>", so
+# rollback can restore modified files AND remove files hardening newly created.
 # Required var: backup_config_file (absolute path on the target).
 
-- name: "Backup config |Require the 'backup_config_file' variable"
+- name: "Backup config | Require the 'backup_config_file' variable"
   ansible.builtin.assert:
     that:
       - backup_config_file is defined
@@ -13,30 +15,50 @@
     fail_msg: "backup_config/file requires the 'backup_config_file' variable."
     quiet: true
 
-- name: "Backup config |Ensure the run backup directory exists"
+- name: "Backup config | Resolve the run backup directory"
+  ansible.builtin.set_fact:
+    _backup_config_run_dir: "{{ castellan_backup_dir }}/{{ castellan_backup_stamp | default('manual') }}"
+
+- name: "Backup config | Ensure the run backup directory exists"
   ansible.builtin.file:
-    path: "{{ castellan_backup_dir }}/{{ castellan_backup_stamp | default('manual') }}"
+    path: "{{ _backup_config_run_dir }}"
     state: directory
     owner: root
     group: root
     mode: "0700"
   become: true
 
-- name: "Backup config |Stat {{ backup_config_file }}"
+- name: "Backup config | Stat {{ backup_config_file }}"
   ansible.builtin.stat:
     path: "{{ backup_config_file }}"
   register: _castellan_backup_stat
   become: true
 
-- name: "Backup config |Back up {{ backup_config_file }}"
-  ansible.builtin.copy:
-    src: "{{ backup_config_file }}"
-    dest: >-
-      {{ castellan_backup_dir }}/{{ castellan_backup_stamp | default('manual') }}/{{
-      backup_config_file | regex_replace('^/', '') | regex_replace('/', '_') }}
-    remote_src: true
+- name: "Backup config | Record the manifest entry for {{ backup_config_file }}"
+  ansible.builtin.lineinfile:
+    path: "{{ _backup_config_run_dir }}/MANIFEST"
+    line: "{{ backup_config_file }}|{{ _castellan_backup_stat.stat.exists }}"
+    create: true
     owner: root
     group: root
     mode: "0600"
+  become: true
+
+- name: "Backup config | Ensure the backup parent directory exists"
+  ansible.builtin.file:
+    path: "{{ (_backup_config_run_dir ~ '/' ~ (backup_config_file | regex_replace('^/', ''))) | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+  when: _castellan_backup_stat.stat.exists
+
+- name: "Backup config | Back up {{ backup_config_file }}"
+  ansible.builtin.copy:
+    src: "{{ backup_config_file }}"
+    dest: "{{ _backup_config_run_dir }}/{{ backup_config_file | regex_replace('^/', '') }}"
+    remote_src: true
+    mode: preserve
   become: true
   when: _castellan_backup_stat.stat.exists

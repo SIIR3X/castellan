@@ -1,0 +1,100 @@
+---
+# Rollback - restore a Castellan backup on a host.
+#
+# Invoked by `./harden rollback <host>` (NOT part of site.yml). Restores files
+# that hardening modified and removes files it newly created, using the run
+# MANIFEST written by backup_config, then reloads the affected services.
+#
+# Connects as the admin on the (possibly hardened) SSH port. By default it
+# restores the most recent run; pass -e castellan_rollback_stamp=<dir> to target
+# a specific run (e.g. the first apply, to return fully to the pristine state).
+- name: "Castellan | Rollback a backup"
+  hosts: vps
+  gather_facts: false
+  become: true
+  vars:
+    ansible_user: "{{ admin_user }}"
+    ansible_port: "{{ ssh_port | default(initial_port | default(22)) }}"
+    # backup_config's default; resolved here since this play loads no role.
+    castellan_backup_dir_resolved: "{{ castellan_backup_dir | default('/var/backups/castellan') }}"
+
+  tasks:
+    - name: "Rollback | Find backup runs"
+      ansible.builtin.find:
+        paths: "{{ castellan_backup_dir_resolved }}"
+        file_type: directory
+        recurse: false
+      register: _rollback_runs
+
+    - name: "Rollback | Abort if there is nothing to restore"
+      ansible.builtin.fail:
+        msg: "No backups found under {{ castellan_backup_dir_resolved }}."
+      when: _rollback_runs.files | length == 0
+
+    - name: "Rollback | Select the run to restore (latest, or override)"
+      ansible.builtin.set_fact:
+        _rollback_dir: >-
+          {{ (castellan_backup_dir_resolved ~ '/' ~ castellan_rollback_stamp)
+             if (castellan_rollback_stamp is defined and castellan_rollback_stamp | length > 0)
+             else (_rollback_runs.files | sort(attribute='mtime') | last).path }}
+
+    - name: "Rollback | Read the run manifest"
+      ansible.builtin.slurp:
+        src: "{{ _rollback_dir }}/MANIFEST"
+      register: _rollback_manifest
+
+    - name: "Rollback | Parse the manifest entries"
+      ansible.builtin.set_fact:
+        _rollback_entries: "{{ (_rollback_manifest.content | b64decode).splitlines() | map('trim') | select | list }}"
+        _rollback_paths: "{{ (_rollback_manifest.content | b64decode).splitlines() | map('trim') | select | map('regex_replace', '[|].*', '') | list }}"
+
+    - name: "Rollback | Announce the plan"
+      ansible.builtin.debug:
+        msg: "Restoring from {{ _rollback_dir }} ({{ _rollback_entries | length }} tracked files)."
+
+    - name: "Rollback | Restore modified files"
+      ansible.builtin.copy:
+        src: "{{ _rollback_dir }}/{{ item.split('|')[0] | regex_replace('^/', '') }}"
+        dest: "{{ item.split('|')[0] }}"
+        remote_src: true
+        mode: preserve
+      loop: "{{ _rollback_entries }}"
+      loop_control:
+        label: "{{ item.split('|')[0] }}"
+      when: item.split('|')[1] == 'True'
+
+    - name: "Rollback | Remove files that hardening created"
+      ansible.builtin.file:
+        path: "{{ item.split('|')[0] }}"
+        state: absent
+      loop: "{{ _rollback_entries }}"
+      loop_control:
+        label: "{{ item.split('|')[0] }}"
+      when: item.split('|')[1] == 'False'
+
+    - name: "Rollback | Gather service facts"
+      ansible.builtin.service_facts:
+
+    - name: "Rollback | Reload sshd if SSH config was rolled back"
+      ansible.builtin.service:
+        name: ssh
+        state: reloaded
+      when:
+        - _rollback_paths | select('search', '^/etc/ssh/') | list | length > 0
+        - "'ssh.service' in ansible_facts.services"
+
+    - name: "Rollback | Restart ufw if firewall config was rolled back"
+      ansible.builtin.service:
+        name: ufw
+        state: restarted
+      when:
+        - _rollback_paths | select('search', 'ufw') | list | length > 0
+        - "'ufw.service' in ansible_facts.services"
+
+    - name: "Rollback | Restart fail2ban if its config was rolled back"
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+      when:
+        - _rollback_paths | select('search', '/etc/fail2ban') | list | length > 0
+        - "'fail2ban.service' in ansible_facts.services"
