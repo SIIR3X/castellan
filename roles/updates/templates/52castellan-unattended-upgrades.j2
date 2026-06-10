@@ -1,5 +1,9 @@
 // Managed by Castellan - overrides 50unattended-upgrades (higher number wins).
-// Security origins (6.3) are kept from the distro default 50unattended-upgrades.
+// 6.3 - security-only origins are enforced by commenting the base release
+// pocket directly in 50unattended-upgrades (apt MERGES Allowed-Origins across
+// apt.conf.d, so a drop-in can only add, never remove). See the role's
+// apply.yml. The active non-security pockets (-updates/-proposed/-backports)
+// are already disabled in the distro default.
 
 // 6.4 - reboot for kernel updates, within a window.
 Unattended-Upgrade::Automatic-Reboot "{{ 'true' if auto_reboot | bool else 'false' }}";

@@ -27,8 +27,8 @@ all:
           admin_pubkey_file: test/secrets/id_test.pub
           sudo_mode: nopasswd
 
-          # SSH stays on 22 for now; revisit when the ssh role changes the port
-          # (no NAT mapping here, so a port change is straightforward later).
+          # Port-change test (2.6): bootstrap connects on initial_port; the
+          # ssh role moves the listener to ssh_port via ssh.socket.
           ssh_port: 22
           ssh_allow_groups: [ssh-users]
 

@@ -6,14 +6,6 @@
 # contains the admin's group. The config is validated (sshd -t) before being put
 # in place, and applied with a RELOAD (not restart) flushed at the very end.
 
-- name: "Ssh | Warn that port change is deferred under socket activation"
-  ansible.builtin.debug:
-    msg: >-
-      [ssh] ssh_port={{ ssh_port }} but the port is left unchanged: Ubuntu uses
-      ssh.socket (socket activation), so changing it needs separate handling
-      (deferred, measure 2.6 is OPT). SSH stays on its current port.
-  when: ssh_port | int != 22
-
 - name: "Ssh | Back up sshd configuration before changes"
   ansible.builtin.include_role:
     name: backup_config
@@ -42,3 +34,54 @@
     group: root
     mode: "0600"
   become: true
+
+# --- 2.18 - remove weak/legacy host keys (ed25519 + rsa are kept) ---
+- name: "Ssh | Remove weak host keys (2.18)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ecdsa_key.pub
+    - /etc/ssh/ssh_host_dsa_key
+    - /etc/ssh/ssh_host_dsa_key.pub
+  become: true
+  when: ssh_remove_weak_host_keys | bool
+  notify: "Ssh | Reload sshd"
+
+# --- 2.6 - change the listening port. On Ubuntu sshd is socket-activated, so
+# the port is owned by ssh.socket (not sshd_config); manage a socket drop-in.
+# Detection: service_facts does NOT list .socket units, so stat the unit file. ---
+- name: "Ssh | Detect the ssh.socket unit (2.6)"
+  ansible.builtin.stat:
+    path: /usr/lib/systemd/system/ssh.socket
+  register: _ssh_socket_unit
+  become: true
+
+# Only touch the socket when actually moving off the default port 22: this keeps
+# normal runs from churning ssh.socket, and a live port change is disruptive
+# (do it deliberately; reverting needs a connection on the new port).
+- name: "Ssh | Ensure the ssh.socket drop-in directory exists (2.6)"
+  ansible.builtin.file:
+    path: /etc/systemd/system/ssh.socket.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when:
+    - _ssh_socket_unit.stat.exists
+    - ssh_port | int != 22
+
+- name: "Ssh | Set the listening port via ssh.socket (2.6)"
+  ansible.builtin.template:
+    src: ssh-socket-port.conf.j2
+    dest: /etc/systemd/system/ssh.socket.d/10-castellan-port.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when:
+    - _ssh_socket_unit.stat.exists
+    - ssh_port | int != 22
+  notify: "Ssh | Apply ssh.socket port change"

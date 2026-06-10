@@ -30,3 +30,6 @@ ssh_x11_forwarding: "no"
 ssh_allow_agent_forwarding: "no"
 ssh_allow_tcp_forwarding: "no"
 ssh_use_dns: "no"
+
+# 2.18 - remove weak/legacy host keys (ecdsa, dsa); ed25519 + rsa are kept.
+ssh_remove_weak_host_keys: true

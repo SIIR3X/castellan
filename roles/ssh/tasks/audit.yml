@@ -25,3 +25,9 @@
       - >-
         2.4 keyboard-interactive disabled:
         {{ 'ok' if ('kbdinteractiveauthentication no' in (_ssh_effective.stdout | default(''))) else 'FAIL' }}
+      - >-
+        2.12 strong host-key algorithms:
+        {{ 'ok' if (('ssh-ed25519' in (_ssh_effective.stdout | default(''))) and ('ssh-dss' not in (_ssh_effective.stdout | default('')))) else 'FAIL' }}
+      - >-
+        2.6 configured port (sshd_config view):
+        {{ (_ssh_effective.stdout_lines | default([]) | select('match', '^port ') | list | first | default('port ?')).split()[1] }}

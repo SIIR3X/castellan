@@ -35,6 +35,12 @@
       when: enable_ssh | default(true)
       tags: [ssh]
 
+    - role: accounts      # account lockdown (lock root LAST, post-verify)
+      when: enable_accounts | default(true)
+      vars:
+        accounts_stage: harden
+      tags: [accounts]
+
     - role: updates       # patch + enable unattended security updates
       when: enable_updates | default(true)
       tags: [updates]

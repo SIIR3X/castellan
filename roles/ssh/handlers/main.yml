@@ -6,3 +6,27 @@
     name: ssh
     state: reloaded
   become: true
+
+# Apply a changed listening port (2.6). sshd inherits its socket from systemd,
+# so BOTH the socket unit and the service must be restarted to rebind the port.
+# The new port is already open in ufw (firewall runs first), so no lockout.
+# All three steps share one 'listen' topic and run in definition order.
+- name: "Ssh | Reload systemd units"
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
+  listen: "Ssh | Apply ssh.socket port change"
+
+- name: "Ssh | Restart the ssh.socket unit"
+  ansible.builtin.systemd_service:
+    name: ssh.socket
+    state: restarted
+  become: true
+  listen: "Ssh | Apply ssh.socket port change"
+
+- name: "Ssh | Restart the ssh service to rebind the port"
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: restarted
+  become: true
+  listen: "Ssh | Apply ssh.socket port change"

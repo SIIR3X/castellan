@@ -1,0 +1,8 @@
+[Unit]
+Description=Castellan periodic Lynis audit (18.2)
+Documentation=https://cisofy.com/lynis/
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart={{ _compliance_lynis_bin }} audit system --quiet --no-colors

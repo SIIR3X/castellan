@@ -13,3 +13,8 @@ compliance_report_dir: reports
 
 # Fetch the raw Lynis files (log + report data) alongside the summary.
 compliance_fetch: true
+
+# 18.2 - schedule a periodic re-audit on the target (systemd timer) to detect
+# configuration drift.
+compliance_periodic_audit: true
+compliance_audit_oncalendar: weekly

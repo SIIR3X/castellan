@@ -24,7 +24,9 @@
     backup_config_file: "{{ item }}"
   loop:
     - /etc/apt/apt.conf.d/20auto-upgrades
+    - /etc/apt/apt.conf.d/50unattended-upgrades
     - /etc/apt/apt.conf.d/52castellan-unattended-upgrades
+    - /etc/apt/apt.conf.d/99castellan-apt-security
 
 - name: "Updates | Enable periodic security updates (6.2)"
   ansible.builtin.template:
@@ -35,6 +37,18 @@
     mode: "0644"
   become: true
 
+- name: "Updates | Restrict auto-upgrades to the security pocket (6.3)"
+  ansible.builtin.replace:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    # Comment the base release pocket so only the -security origins remain
+    # auto-installed. Idempotent (the commented line no longer matches) and
+    # reversible (backed up above). Ubuntu-shaped; a no-op on Debian, whose
+    # default already auto-installs the security label only.
+    regexp: '^(\s*)"\$\{distro_id\}:\$\{distro_codename\}";'
+    replace: '\1// "${distro_id}:${distro_codename}";'
+  become: true
+  when: updates_security_only | bool
+
 - name: "Updates | Configure auto-reboot and cleanup (6.4/6.5)"
   ansible.builtin.template:
     src: 52castellan-unattended-upgrades.j2
@@ -43,6 +57,16 @@
     group: root
     mode: "0644"
   become: true
+
+- name: "Updates | Reject unauthenticated/insecure packages (6.6)"
+  ansible.builtin.template:
+    src: 99castellan-apt-security.conf.j2
+    dest: /etc/apt/apt.conf.d/99castellan-apt-security
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: updates_enforce_authenticity | bool
 
 - name: "Updates | Enable the apt timers"
   ansible.builtin.systemd_service:
