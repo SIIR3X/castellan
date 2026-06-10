@@ -13,5 +13,11 @@ auto_reboot: false
 auto_reboot_time: "02:00"
 updates_auto_reboot_with_users: false
 
+# 6.3 - restrict automatic upgrades to the security pocket only (no -updates).
+updates_security_only: true
+
 # 6.5 - clean up obsolete packages and old kernels.
 updates_remove_unused: true
+
+# 6.6 - refuse unauthenticated/insecure packages and repositories.
+updates_enforce_authenticity: true

@@ -21,6 +21,11 @@ ufw_logging: "on"
 # 4.8 - keep IPv6 filtering consistent with IPv4.
 ufw_ipv6: true
 
+# 4.7 - kernel anti-spoofing. The default before.rules already drops INVALID
+# packets; this adds reverse-path filtering, martian logging and no source
+# routing. (rp_filter=1 is strict; fine for single-homed hosts.)
+ufw_antispoof: true
+
 # 4.10 - optional: restrict SSH to a single source IP. Leave undefined to allow
 # SSH from anywhere (rate-limited). Set e.g. ufw_admin_source_ip: 198.51.100.10
 # ufw_admin_source_ip: ""

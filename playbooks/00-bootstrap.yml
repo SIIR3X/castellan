@@ -19,5 +19,8 @@
 
     # Create the admin user, its groups, SSH key and sudoers drop-in.
     # sshd is left untouched here; the ssh role hardens it in Play 3.
+    # Stage 'bootstrap' = creation only (lockdown happens in Play 3).
     - role: accounts
       when: enable_accounts | default(true)
+      vars:
+        accounts_stage: bootstrap
