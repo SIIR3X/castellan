@@ -1,6 +1,6 @@
 ---
-# accounts (audit) - read-only checks for the admin identity and sudo setup.
-# Reports deviations mapped to docs/security-measures.md; never changes the host.
+# accounts (audit) - read-only checks for section 1. Reports deviations; never
+# changes the host. awk is used for a few /etc/passwd|/etc/shadow scans.
 
 - name: "Accounts | Look up the admin user in passwd"
   ansible.builtin.getent:
@@ -18,21 +18,65 @@
   check_mode: false
   become: true
 
-- name: "Accounts | Stat the sudoers drop-in"
+- name: "Accounts | Check the root account lock status (1.2)"
+  ansible.builtin.command: passwd -S root
+  register: _accounts_root_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Accounts | Stat the admin and logging sudoers drop-ins"
   ansible.builtin.stat:
-    path: "/etc/sudoers.d/castellan-{{ admin_user }}"
+    path: "{{ item }}"
   register: _accounts_sudoers
+  loop:
+    - "/etc/sudoers.d/castellan-{{ admin_user }}"
+    - /etc/sudoers.d/10-castellan-logging
+  become: true
+
+- name: "Accounts | Scan for UID 0 accounts (1.6)"
+  ansible.builtin.command: "awk -F: '($3==0){print $1}' /etc/passwd"
+  register: _accounts_uid0
+  changed_when: false
+  check_mode: false
+  become: true
+
+- name: "Accounts | Scan for empty-password accounts (1.7)"
+  ansible.builtin.command: "awk -F: '($2==\"\"){print $1}' /etc/shadow"
+  register: _accounts_emptypw
+  changed_when: false
+  check_mode: false
+  become: true
+
+- name: "Accounts | Scan for login-enabled system accounts (1.8)"
+  ansible.builtin.command: "awk -F: '$3>=1 && $3<={{ accounts_sys_uid_max }} && $7 !~ /(nologin|false|sync)/{print $1}' /etc/passwd"
+  register: _accounts_syslogin
+  changed_when: false
+  check_mode: false
   become: true
 
 - name: "Accounts | Report account compliance"
   ansible.builtin.debug:
     msg:
       - >-
-        1.1 admin user '{{ admin_user }}' present:
+        1.1 admin '{{ admin_user }}' present:
         {{ 'ok' if ((_accounts_passwd.ansible_facts.getent_passwd[admin_user] | default([], true) | length) > 0) else 'FAIL' }}
+      - >-
+        1.2 root account locked:
+        {{ 'ok' if (' L ' in (_accounts_root_status.stdout | default(''))) else 'FAIL' }}
       - >-
         1.3 admin in sudo group:
         {{ 'ok' if ('sudo' in (_accounts_groups.stdout | default('') | split())) else 'FAIL' }}
       - >-
-        sudoers drop-in present:
-        {{ 'ok' if _accounts_sudoers.stat.exists else 'absent' }}
+        1.5 sudo logging configured:
+        {{ 'ok' if (_accounts_sudoers.results[1].stat.exists | default(false)) else 'FAIL' }}
+      - >-
+        1.6 single UID 0 (root only):
+        {{ 'ok' if (_accounts_uid0.stdout_lines | length == 1) else ('FAIL: ' ~ (_accounts_uid0.stdout_lines | join(','))) }}
+      - >-
+        1.7 no empty-password accounts:
+        {{ 'ok' if (_accounts_emptypw.stdout_lines | length == 0) else ('FAIL: ' ~ (_accounts_emptypw.stdout_lines | join(','))) }}
+      - >-
+        1.8 login-enabled system accounts:
+        {{ _accounts_syslogin.stdout_lines | length }}

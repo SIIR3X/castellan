@@ -19,6 +19,14 @@
   become: true
   when: _firewall_installed.rc == 0
 
+- name: "Firewall | Read the anti-spoofing setting (4.7)"
+  ansible.builtin.command: sysctl -n net.ipv4.conf.all.rp_filter
+  register: _firewall_rpfilter
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Firewall | Report firewall compliance"
   ansible.builtin.debug:
     msg:
@@ -34,3 +42,6 @@
       - >-
         4.3 SSH port {{ ssh_port }} present in rules:
         {{ 'ok' if ((ssh_port | string) in (_firewall_status.stdout | default(''))) else 'FAIL' }}
+      - >-
+        4.7 anti-spoofing (rp_filter):
+        {{ 'ok' if ((_firewall_rpfilter.stdout | default('0') | trim) == '1') else 'FAIL' }}

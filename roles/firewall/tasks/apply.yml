@@ -76,3 +76,17 @@
   community.general.ufw:
     state: enabled
   become: true
+
+# 4.7 - kernel anti-spoofing (the before.rules INVALID drop is already default).
+# Templated file + a single reload via handler -> fully idempotent (the
+# ansible.posix.sysctl module reports spurious changes on some keys).
+- name: "Firewall | Deploy kernel anti-spoofing sysctls (4.7)"
+  ansible.builtin.template:
+    src: 60-castellan-firewall.conf.j2
+    dest: /etc/sysctl.d/60-castellan-firewall.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: ufw_antispoof | bool
+  notify: "Firewall | Reload sysctl"

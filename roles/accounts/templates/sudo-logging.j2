@@ -1,0 +1,7 @@
+# Managed by Castellan - sudo command logging (1.5). Do not edit by hand.
+Defaults logfile="{{ accounts_sudo_logfile }}"
+Defaults log_input, log_output
+Defaults!/usr/bin/sudoreplay !log_output
+Defaults!/usr/bin/sudoreplay !log_input
+Defaults!/usr/sbin/visudo !log_output
+Defaults!/usr/sbin/visudo !log_input

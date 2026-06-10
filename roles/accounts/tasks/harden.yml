@@ -1,0 +1,114 @@
+---
+# accounts (harden) - section 1 lockdown. Runs in the harden play
+# (accounts_stage=harden) as the admin, AFTER Play 2 verified access. Every
+# edited file is backed up via backup_config first. Lock-root (1.2) runs last.
+
+- name: "Accounts | Back up files before hardening"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/login.defs
+    - /etc/pam.d/su
+
+- name: "Accounts | Configure sudo command logging (1.5)"
+  ansible.builtin.template:
+    src: sudo-logging.j2
+    dest: /etc/sudoers.d/10-castellan-logging
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  become: true
+  when: accounts_sudo_log | bool
+
+- name: "Accounts | Set password aging and umask in login.defs (1.9/1.10)"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^#?\\s*{{ item.key }}\\b"
+    line: "{{ item.key }}\t{{ item.value }}"
+    state: present
+  loop:
+    - key: PASS_MAX_DAYS
+      value: "{{ accounts_pass_max_days }}"
+    - key: PASS_MIN_DAYS
+      value: "{{ accounts_pass_min_days }}"
+    - key: PASS_WARN_AGE
+      value: "{{ accounts_pass_warn_age }}"
+    - key: UMASK
+      value: "{{ accounts_umask }}"
+  loop_control:
+    label: "{{ item.key }}"
+  become: true
+
+- name: "Accounts | Enforce a restrictive umask in profile.d (1.10)"
+  ansible.builtin.copy:
+    dest: /etc/profile.d/99-castellan-umask.sh
+    content: |
+      # Managed by Castellan (1.10) - restrictive default umask.
+      umask {{ accounts_umask }}
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: "Accounts | Set an interactive shell idle timeout (1.11)"
+  ansible.builtin.copy:
+    dest: /etc/profile.d/99-castellan-tmout.sh
+    content: |
+      # Managed by Castellan (1.11) - auto-logout idle interactive shells.
+      TMOUT={{ accounts_tmout }}
+      export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: "Accounts | Restrict su to a group via pam_wheel (1.12)"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so'
+    line: "auth       required   pam_wheel.so use_uid group={{ accounts_su_group }}"
+    insertafter: '^#%PAM'
+    state: present
+  become: true
+  when: accounts_restrict_su | bool
+
+- name: "Accounts | Read the passwd database (1.8)"
+  ansible.builtin.getent:
+    database: passwd
+  become: true
+  when: accounts_lock_service_accounts | bool
+
+- name: "Accounts | Give login-enabled system accounts a nologin shell (1.8)"
+  ansible.builtin.user:
+    name: "{{ item.key }}"
+    shell: /usr/sbin/nologin
+  loop: "{{ ansible_facts.getent_passwd | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - accounts_lock_service_accounts | bool
+    - item.key != admin_user
+    - (item.value[1] | int) > 0
+    - (item.value[1] | int) <= (accounts_sys_uid_max | int)
+    - item.value[5] not in accounts_service_shell_keep
+  become: true
+
+- name: "Accounts | Remove unused accounts (1.13)"
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: false
+  loop: "{{ accounts_unused_users }}"
+  become: true
+  when: accounts_remove_unused | bool
+
+- name: "Accounts | Lock the root account (1.2)"
+  ansible.builtin.user:
+    name: root
+    password_lock: true
+  become: true
+  when: accounts_lock_root | bool

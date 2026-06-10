@@ -1,0 +1,51 @@
+---
+# accounts (create) - create the non-root admin, its groups, SSH key and sudoers.
+# Runs in the bootstrap play (accounts_stage=bootstrap) with the INITIAL
+# credentials. Creates new objects only, so no pre-change backup is needed.
+# Anti-lockout: the admin is placed in every ssh_allow_groups group up front,
+# so the later ssh role (AllowGroups) cannot exclude it. (1.1, 1.3)
+
+- name: "Accounts | Ensure SSH access group(s) exist"
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ (ssh_allow_groups | default([])) + (admin_extra_groups | default([])) }}"
+  become: true
+
+- name: "Accounts | Read the admin public key from the control machine"
+  ansible.builtin.set_fact:
+    # admin_pubkey_file is given relative to the repo root (e.g.
+    # files/public_keys/id.pub); anchor it there, since the file lookup
+    # otherwise searches relative to the playbooks/ directory.
+    _accounts_pubkey: >-
+      {{ lookup('file', admin_pubkey_file if admin_pubkey_file.startswith('/')
+         else playbook_dir ~ '/../' ~ admin_pubkey_file) }}
+
+- name: "Accounts | Create the non-root admin user '{{ admin_user }}'"
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    shell: "{{ admin_shell }}"
+    groups: "{{ (['sudo'] + (ssh_allow_groups | default([])) + (admin_extra_groups | default([]))) | unique }}"
+    append: true
+    create_home: true
+    state: present
+  become: true
+
+- name: "Accounts | Deploy the admin SSH public key"
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ _accounts_pubkey }}"
+    state: present
+    exclusive: false
+    manage_dir: true
+  become: true
+
+- name: "Accounts | Install the sudoers drop-in for '{{ admin_user }}'"
+  ansible.builtin.template:
+    src: sudoer.j2
+    dest: "/etc/sudoers.d/castellan-{{ admin_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  become: true

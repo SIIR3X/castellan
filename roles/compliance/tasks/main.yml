@@ -52,6 +52,66 @@
   check_mode: false
   become: true
 
+# --- 18.6 - document the applied state on the target (apply mode only) ---
+- name: "Compliance | Ensure the Castellan state directory exists (18.6)"
+  ansible.builtin.file:
+    path: /etc/castellan
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: castellan_mode | default('apply') != 'audit'
+
+- name: "Compliance | Record the applied hardening state (18.6)"
+  ansible.builtin.template:
+    src: applied-state.yml.j2
+    dest: /etc/castellan/applied-state.yml
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: castellan_mode | default('apply') != 'audit'
+
+# --- 18.2 - schedule a periodic re-audit to detect drift (apply mode only) ---
+- name: "Compliance | Locate the lynis binary (18.2)"
+  ansible.builtin.command: command -v lynis
+  register: _compliance_lynis_bin_raw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Compliance | Set the lynis binary path (18.2)"
+  ansible.builtin.set_fact:
+    _compliance_lynis_bin: "{{ _compliance_lynis_bin_raw.stdout | default('/usr/sbin/lynis') | trim }}"
+
+- name: "Compliance | Install the periodic re-audit timer (18.2)"
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - castellan-lynis.service.j2
+    - castellan-lynis.timer.j2
+  become: true
+  when:
+    - compliance_periodic_audit | bool
+    - castellan_mode | default('apply') != 'audit'
+
+- name: "Compliance | Enable the periodic re-audit timer (18.2)"
+  ansible.builtin.systemd_service:
+    name: castellan-lynis.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when:
+    - compliance_periodic_audit | bool
+    - castellan_mode | default('apply') != 'audit'
+
 - name: "Compliance | Create the local report directory"
   ansible.builtin.file:
     path: "{{ compliance_local_path }}"
