@@ -69,8 +69,12 @@
       when: enable_confinement | default(false)
       tags: [confinement]
 
+    - role: filesystem    # temp-mount hardening + sensitive file perms
+      when: enable_filesystem | default(true)
+      tags: [filesystem]
+
     # TODO next: low-risk roles
-    #   - filesystem, integrity, cron, boot
+    #   - integrity, cron, boot
 
   post_tasks:
     # Flush handlers explicitly so sshd is reloaded ONCE, after every role's
