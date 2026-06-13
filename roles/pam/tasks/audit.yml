@@ -1,0 +1,70 @@
+---
+# pam (audit) - read-only password-policy / lockout checks. Reports deviations
+# mapped to docs/security-measures.md section 13; never changes the host.
+
+- name: "PAM | Check whether libpam-pwquality is installed"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' libpam-pwquality
+  register: _pam_pwq_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "PAM | Read PAM and security files"
+  ansible.builtin.command: "cat {{ item }}"
+  register: _pam_files
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop:
+    - /etc/pam.d/common-auth
+    - /etc/pam.d/common-password
+    - /etc/security/pwquality.conf
+    - /etc/security/pwhistory.conf
+    - /etc/security/faillock.conf
+  loop_control:
+    label: "{{ item }}"
+
+- name: "PAM | Report section 13 compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        13.1 libpam-pwquality installed:
+        {{ 'ok' if 'install ok installed' in (_pam_pwq_pkg.stdout | default('')) else 'FAIL' }}
+      - >-
+        13.1 pwquality minlen={{ pam_pwquality_minlen }}:
+        {{ 'ok' if ('minlen = ' ~ pam_pwquality_minlen) in _pam_auth.pwquality else 'FAIL' }}
+      - >-
+        13.1 pam_pwquality wired in common-password:
+        {{ 'ok' if 'pam_pwquality.so' in _pam_auth.password else 'FAIL' }}
+      - >-
+        13.2 strong hashing (yescrypt|sha512):
+        {{ 'ok' if ('yescrypt' in _pam_auth.password or 'sha512' in _pam_auth.password) else 'FAIL' }}
+      - >-
+        13.3/13.6 pam_pwhistory wired in common-password:
+        {{ 'ok' if 'pam_pwhistory.so' in _pam_auth.password else 'FAIL' }}
+      - >-
+        13.3 pwhistory remember={{ pam_pwhistory_remember }}:
+        {{ 'ok' if ('remember = ' ~ pam_pwhistory_remember) in _pam_auth.pwhistory else 'FAIL' }}
+      - >-
+        13.4 faillock preauth in common-auth:
+        {{ 'ok' if ('pam_faillock.so' in _pam_auth.auth and 'preauth' in _pam_auth.auth)
+           else ('skipped' if not pam_faillock_enable | bool else 'FAIL') }}
+      - >-
+        13.4 faillock deny={{ pam_faillock_deny }}:
+        {{ 'ok' if ('deny = ' ~ pam_faillock_deny) in _pam_auth.faillock
+           else ('skipped' if not pam_faillock_enable | bool else 'FAIL') }}
+      - >-
+        13.5 pam_faildelay in common-auth:
+        {{ 'ok' if 'pam_faildelay.so' in _pam_auth.auth
+           else ('skipped' if not pam_faildelay_enable | bool else 'FAIL') }}
+  vars:
+    _pam_auth: >-
+      {{ {
+        'auth': (_pam_files.results[0].stdout | default('')),
+        'password': (_pam_files.results[1].stdout | default('')),
+        'pwquality': (_pam_files.results[2].stdout | default('')),
+        'pwhistory': (_pam_files.results[3].stdout | default('')),
+        'faillock': (_pam_files.results[4].stdout | default(''))
+      } }}

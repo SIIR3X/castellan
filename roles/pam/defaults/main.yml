@@ -1,0 +1,47 @@
+---
+# pam role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 13 (password policy & PAM). Medium
+# lockout risk: PAM controls authentication, so the auth stack is edited via
+# community.general.pamd (which PARSES the file) rather than by hand, and every
+# edited file is backed up first. The admin uses key-based SSH + NOPASSWD sudo,
+# so it never accumulates password failures and faillock cannot lock it out.
+#
+# NOTE on durability: faillock / pwhistory / faildelay are inserted directly
+# into /etc/pam.d/common-* (they are not pam-auth-update profiles), so a future
+# `pam-auth-update` run (e.g. on a libpam upgrade) can drop them. Re-running
+# `harden apply` restores them; the audit reports if they are missing.
+#
+# login.defs aging (13.7) and pam_wheel for su (1.12) are owned by the accounts
+# role; this role intentionally does not touch login.defs.
+
+# --- 13.1 Password complexity (pam_pwquality, /etc/security/pwquality.conf) ---
+pam_pwquality_minlen: 14
+pam_pwquality_dcredit: -1          # at least 1 digit
+pam_pwquality_ucredit: -1          # at least 1 uppercase
+pam_pwquality_ocredit: -1          # at least 1 special char
+pam_pwquality_lcredit: -1          # at least 1 lowercase
+pam_pwquality_minclass: 4
+pam_pwquality_difok: 3
+pam_pwquality_retry: 3
+pam_pwquality_enforce_for_root: true
+
+# --- 13.3 / 13.6 Password history (pam_pwhistory, pwhistory.conf) ---
+pam_pwhistory_remember: 5
+pam_pwhistory_enforce_for_root: true
+
+# --- 13.4 Lockout after failures (pam_faillock, faillock.conf) ---
+# Anti-lockout: root is NOT locked (no even_deny_root) and accounts auto-unlock
+# after unlock_time. Set pam_faillock_enable: false for password-based fleets
+# where an operator could realistically get locked out.
+pam_faillock_enable: true
+pam_faillock_deny: 5
+pam_faillock_unlock_time: 900
+pam_faillock_fail_interval: 900
+
+# --- 13.5 Delay between attempts (pam_faildelay) ---
+pam_faildelay_enable: true
+pam_faildelay_delay: 4000000       # microseconds (4s)
+
+# --- 13.2 Strong hashing - audited; remediated only if neither value is set ---
+pam_hash_acceptable: [yescrypt, sha512]
