@@ -73,8 +73,12 @@
       when: enable_filesystem | default(true)
       tags: [filesystem]
 
+    - role: cron          # restrict cron/at access + crontab perms
+      when: enable_cron | default(true)
+      tags: [cron]
+
     # TODO next: low-risk roles
-    #   - integrity, cron, boot
+    #   - integrity, boot
 
   post_tasks:
     # Flush handlers explicitly so sshd is reloaded ONCE, after every role's
