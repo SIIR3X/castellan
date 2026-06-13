@@ -53,9 +53,13 @@
       when: enable_pam | default(true)
       tags: [pam]
 
+    - role: audit_logging  # auditd + persistent journald (no lockout path)
+      when: enable_audit_logging | default(true)
+      tags: [audit_logging]
+
     # TODO next: low-risk roles
     #   - confinement, filesystem, services,
-    #     audit_logging, integrity, network, cron, boot
+    #     integrity, network, cron, boot
 
   post_tasks:
     # Flush handlers explicitly so sshd is reloaded ONCE, after every role's

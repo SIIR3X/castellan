@@ -1,0 +1,11 @@
+---
+# audit_logging - dispatch on castellan_mode (see docs/architecture.md sec 4).
+# audit -> read-only checks; apply -> install/configure auditd, journald, rsyslog.
+
+- name: "Audit logging | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Audit logging | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'
