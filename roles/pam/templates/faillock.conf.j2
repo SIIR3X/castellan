@@ -1,0 +1,5 @@
+# Managed by Castellan - account lockout (13.4). Do not edit by hand.
+# Root is intentionally not locked (no even_deny_root): anti-lockout.
+deny = {{ pam_faillock_deny }}
+unlock_time = {{ pam_faillock_unlock_time }}
+fail_interval = {{ pam_faillock_fail_interval }}

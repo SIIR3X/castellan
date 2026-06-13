@@ -1,0 +1,176 @@
+---
+# pam (apply) - enforce password policy and login lockout (section 13).
+#
+# Anti-lockout: every edited file is backed up first; the auth stack is changed
+# with community.general.pamd (parses the PAM file, never blind-seds). faillock
+# is built so it does NOT alter pam_unix's existing success=N jump (preauth
+# before, authfail + authsucc after), and root is never locked. No service
+# reload is needed (PAM is consulted per authentication).
+
+- name: "PAM | Back up PAM and security files before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/pam.d/common-auth
+    - /etc/pam.d/common-password
+    - /etc/pam.d/common-account
+    - /etc/security/pwquality.conf
+    - /etc/security/pwhistory.conf
+    - /etc/security/faillock.conf
+
+# --- 13.1 Password complexity -------------------------------------------------
+- name: "PAM | Install libpam-pwquality (13.1)"
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: "PAM | Configure password quality policy (13.1)"
+  ansible.builtin.template:
+    src: pwquality.conf.j2
+    dest: /etc/security/pwquality.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+# --- 13.3 / 13.6 Password history --------------------------------------------
+- name: "PAM | Configure password history policy (13.3/13.6)"
+  ansible.builtin.template:
+    src: pwhistory.conf.j2
+    dest: /etc/security/pwhistory.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: "PAM | Enable pam_pwhistory in common-password (13.3/13.6)"
+  community.general.pamd:
+    name: common-password
+    type: password
+    control: "[success=1 default=ignore]"
+    module_path: pam_unix.so
+    new_type: password
+    new_control: required
+    new_module_path: pam_pwhistory.so
+    module_arguments: use_authtok
+    state: before
+  become: true
+
+# --- 13.2 Strong hashing (audit-first; remediate only if neither value set) ---
+- name: "PAM | Read common-password to check the hashing algorithm (13.2)"
+  ansible.builtin.slurp:
+    src: /etc/pam.d/common-password
+  register: _pam_common_password_b64
+  become: true
+
+- name: "PAM | Ensure a strong password hash on pam_unix (13.2)"
+  community.general.pamd:
+    name: common-password
+    type: password
+    control: "[success=1 default=ignore]"
+    module_path: pam_unix.so
+    module_arguments: yescrypt
+    state: args_present
+  become: true
+  when:
+    - "'yescrypt' not in (_pam_common_password_b64.content | b64decode)"
+    - "'sha512' not in (_pam_common_password_b64.content | b64decode)"
+
+# --- 13.4 Account lockout (faillock) -----------------------------------------
+# faillock.conf carries the tunables; the stack only needs the keyword args.
+#
+# pamd insert is idempotent only when the new rule is checked against the
+# reference it is ACTUALLY adjacent to. So we ANCHOR EACH module to its true
+# neighbour (not all to pam_unix): otherwise two modules on the same side of
+# pam_unix get re-inserted every run (duplicates). Final order:
+#   faildelay -> faillock preauth -> pam_unix -> faillock authfail -> authsucc
+# pam_unix keeps its success=1 jump: on success it skips authfail and lands on
+# the sufficient authsucc (clears the counter); on failure it falls into authfail.
+- name: "PAM | Configure account lockout policy (13.4)"
+  ansible.builtin.template:
+    src: faillock.conf.j2
+    dest: /etc/security/faillock.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pam_faillock_enable | bool
+
+- name: "PAM | faillock preauth before pam_unix in common-auth (13.4)"
+  community.general.pamd:
+    name: common-auth
+    type: auth
+    control: "[success=1 default=ignore]"
+    module_path: pam_unix.so
+    new_type: auth
+    new_control: required
+    new_module_path: pam_faillock.so
+    module_arguments: preauth
+    state: before
+  become: true
+  when: pam_faillock_enable | bool
+
+- name: "PAM | faillock authfail after pam_unix in common-auth (13.4)"
+  community.general.pamd:
+    name: common-auth
+    type: auth
+    control: "[success=1 default=ignore]"
+    module_path: pam_unix.so
+    new_type: auth
+    new_control: "[default=die]"
+    new_module_path: pam_faillock.so
+    module_arguments: authfail
+    state: after
+  become: true
+  when: pam_faillock_enable | bool
+
+# Anchored AFTER authfail (the [default=die] pam_faillock line), not pam_unix.
+- name: "PAM | faillock authsucc after authfail in common-auth (13.4)"
+  community.general.pamd:
+    name: common-auth
+    type: auth
+    control: "[default=die]"
+    module_path: pam_faillock.so
+    new_type: auth
+    new_control: sufficient
+    new_module_path: pam_faillock.so
+    module_arguments: authsucc
+    state: after
+  become: true
+  when: pam_faillock_enable | bool
+
+# --- 13.5 Delay between failed attempts --------------------------------------
+# Anchored before the faillock preauth line when faillock is on, else before
+# pam_unix - again so it stays adjacent to a single reference and is idempotent.
+- name: "PAM | Enable pam_faildelay in common-auth (13.5)"
+  community.general.pamd:
+    name: common-auth
+    type: auth
+    control: "{{ 'required' if pam_faillock_enable | bool else '[success=1 default=ignore]' }}"
+    module_path: "{{ 'pam_faillock.so' if pam_faillock_enable | bool else 'pam_unix.so' }}"
+    new_type: auth
+    new_control: required
+    new_module_path: pam_faildelay.so
+    module_arguments: "delay={{ pam_faildelay_delay }}"
+    state: before
+  become: true
+  when: pam_faildelay_enable | bool
+
+- name: "PAM | faillock account in common-account (13.4)"
+  community.general.pamd:
+    name: common-account
+    type: account
+    control: "[success=1 new_authtok_reqd=done default=ignore]"
+    module_path: pam_unix.so
+    new_type: account
+    new_control: required
+    new_module_path: pam_faillock.so
+    state: before
+  become: true
+  when: pam_faillock_enable | bool
