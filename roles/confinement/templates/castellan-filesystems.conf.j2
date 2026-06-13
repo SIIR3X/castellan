@@ -1,0 +1,5 @@
+# Managed by Castellan - disable rare filesystem modules (8.8). Do not edit.
+{% for m in confinement_blacklist_fs_modules %}
+install {{ m }} /bin/true
+blacklist {{ m }}
+{% endfor %}
