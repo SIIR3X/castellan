@@ -1,0 +1,23 @@
+---
+# integrity role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 12 (file integrity & anti-malware).
+# No lockout risk: AIDE and debsums are passive. The AIDE baseline is built only
+# when it does not exist yet (or when integrity_aide_reinit is set), since it is
+# slow and must snapshot the already-hardened state. OPT 12.3/12.4/12.6 are out
+# of scope. Scheduled checks (12.1) come from aide-common's /etc/cron.daily/aide.
+
+# --- 12.1 / 12.2 AIDE ---------------------------------------------------------
+integrity_aide: true
+# Ubuntu 24.04 uses uncompressed databases (database_in/out in aide.conf). On
+# distros that gzip the DB, override these with the .gz paths.
+integrity_aide_db: /var/lib/aide/aide.db
+integrity_aide_db_new: /var/lib/aide/aide.db.new
+# Force a rebuild of the baseline even if a database already exists. Do this
+# only after deliberate, reviewed system changes.
+integrity_aide_reinit: false
+# Ubuntu 24.04 schedules the daily check via a systemd timer (not cron.daily).
+integrity_aide_timer: dailyaidecheck.timer
+
+# --- 12.5 Verify installed packages ------------------------------------------
+integrity_debsums: true

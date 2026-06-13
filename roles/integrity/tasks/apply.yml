@@ -1,0 +1,76 @@
+---
+# integrity (apply) - file integrity (AIDE) and package verification (sec 12).
+# Passive tooling; the only slow step is the one-off AIDE baseline.
+
+# --- 12.1 / 12.5 install ------------------------------------------------------
+# install_recommends: false is deliberate - aide-common Recommends an MTA
+# (bsd-mailx -> default-mta -> postfix). On a hardened server we do NOT want to
+# pull in a mail server; the daily check still ships via aide-common's cron.
+- name: "Integrity | Install AIDE (12.1)"
+  ansible.builtin.apt:
+    name:
+      - aide
+      - aide-common
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: integrity_aide | bool
+
+- name: "Integrity | Install debsums (12.5)"
+  ansible.builtin.apt:
+    name: debsums
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: integrity_debsums | bool
+
+# --- 12.2 Initialize the AIDE baseline (only when missing) -------------------
+- name: "Integrity | Build the AIDE baseline"
+  when: integrity_aide | bool
+  block:
+    - name: "Integrity | Check for an existing AIDE database (12.2)"
+      ansible.builtin.stat:
+        path: "{{ integrity_aide_db }}"
+      register: _integrity_db
+      become: true
+
+    - name: "Integrity | Initialize the AIDE database (12.2)"
+      ansible.builtin.command: aideinit -y -f
+      changed_when: true
+      become: true
+      when: not _integrity_db.stat.exists or integrity_aide_reinit | bool
+
+    - name: "Integrity | Stat the freshly built database (12.2)"
+      ansible.builtin.stat:
+        path: "{{ integrity_aide_db_new }}"
+      register: _integrity_db_new
+      become: true
+      when: not _integrity_db.stat.exists or integrity_aide_reinit | bool
+
+    # aideinit already activates the DB on Ubuntu; this is the portable fallback
+    # for builds that only produce the .new file. No-op when contents match.
+    - name: "Integrity | Activate the new AIDE database (12.2)"
+      ansible.builtin.copy:
+        src: "{{ integrity_aide_db_new }}"
+        dest: "{{ integrity_aide_db }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      become: true
+      when:
+        - not _integrity_db.stat.exists or integrity_aide_reinit | bool
+        - _integrity_db_new.stat.exists | default(false)
+
+    # aide-common ships and auto-enables this; ensure it explicitly (12.1).
+    - name: "Integrity | Ensure the daily AIDE check timer is enabled (12.1)"
+      ansible.builtin.systemd_service:
+        name: "{{ integrity_aide_timer }}"
+        state: started
+        enabled: true
+      become: true
+      failed_when: false
