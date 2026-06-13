@@ -1,0 +1,10 @@
+# Managed by Castellan - DNS hardening on systemd-resolved (14.1).
+[Resolve]
+{% if network_dns_servers | length > 0 %}
+DNS={{ network_dns_servers | join(' ') }}
+{% endif %}
+{% if network_fallback_dns | length > 0 %}
+FallbackDNS={{ network_fallback_dns | join(' ') }}
+{% endif %}
+DNSSEC={{ network_dnssec }}
+DNSOverTLS={{ network_dns_over_tls }}
