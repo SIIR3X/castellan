@@ -57,8 +57,12 @@
       when: enable_audit_logging | default(true)
       tags: [audit_logging]
 
+    - role: services      # purge/disable unused services (explicit denylists)
+      when: enable_services | default(true)
+      tags: [services]
+
     # TODO next: low-risk roles
-    #   - confinement, filesystem, services,
+    #   - confinement, filesystem,
     #     integrity, network, cron, boot
 
   post_tasks:
