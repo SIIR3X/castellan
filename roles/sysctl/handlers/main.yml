@@ -1,0 +1,8 @@
+---
+# Reapply sysctl settings after the drop-in changes. Fires only when the file
+# actually changes, so the role stays idempotent. There is no module to reload
+# all sysctl files, hence the command.
+- name: "Sysctl | Reload sysctl"
+  ansible.builtin.command: sysctl --system  # noqa: command-instead-of-module
+  changed_when: false
+  become: true

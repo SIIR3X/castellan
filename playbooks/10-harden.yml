@@ -45,8 +45,12 @@
       when: enable_updates | default(true)
       tags: [updates]
 
+    - role: sysctl        # kernel/network/filesystem tunables (no lockout path)
+      when: enable_sysctl | default(true)
+      tags: [sysctl]
+
     # TODO next: low-risk roles
-    #   - sysctl, pam, confinement, filesystem, services,
+    #   - pam, confinement, filesystem, services,
     #     audit_logging, integrity, network, cron, boot
 
   post_tasks:

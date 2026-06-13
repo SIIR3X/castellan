@@ -1,0 +1,54 @@
+---
+# sysctl role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 7 (kernel / network / filesystem
+# parameters). Low lockout risk: these tunables never touch SSH or the firewall
+# path. Settings are written to a single sysctl.d drop-in and reloaded once.
+#
+# NOTE: the firewall role owns the anti-spoofing trio (7.1 rp_filter,
+# 7.3 accept_source_route, 7.6 log_martians) in 60-castellan-firewall.conf, so
+# they are intentionally NOT repeated here. If you disable the firewall role and
+# still want them, add them to sysctl_extra_settings below.
+
+# Single source of truth: every parameter is rendered into the drop-in AND
+# checked by the audit. Each entry carries the docs id for clear reporting.
+sysctl_settings:
+  # --- Network (7.2/7.4/7.5/7.7/7.8) ---
+  - {id: "7.4", key: "net.ipv4.tcp_syncookies", value: 1}
+  - {id: "7.5", key: "net.ipv4.icmp_echo_ignore_broadcasts", value: 1}
+  - {id: "7.2", key: "net.ipv4.conf.all.accept_redirects", value: 0}
+  - {id: "7.2", key: "net.ipv4.conf.default.accept_redirects", value: 0}
+  - {id: "7.2", key: "net.ipv4.conf.all.secure_redirects", value: 0}
+  - {id: "7.2", key: "net.ipv4.conf.default.secure_redirects", value: 0}
+  - {id: "7.2", key: "net.ipv4.conf.all.send_redirects", value: 0}
+  - {id: "7.2", key: "net.ipv4.conf.default.send_redirects", value: 0}
+  # 7.7 - disable IP forwarding. Set sysctl_ip_forward to 1 via host_vars on
+  # router/NAT/container hosts (e.g. Docker needs forwarding enabled).
+  - {id: "7.7", key: "net.ipv4.ip_forward", value: "{{ sysctl_ip_forward }}"}
+  - {id: "7.8", key: "net.ipv6.conf.all.accept_ra", value: 0}
+  - {id: "7.8", key: "net.ipv6.conf.default.accept_ra", value: 0}
+  - {id: "7.8", key: "net.ipv6.conf.all.accept_redirects", value: 0}
+  - {id: "7.8", key: "net.ipv6.conf.default.accept_redirects", value: 0}
+  # --- Kernel (7.9-7.13) ---
+  - {id: "7.9", key: "kernel.randomize_va_space", value: 2}
+  - {id: "7.10", key: "kernel.dmesg_restrict", value: 1}
+  - {id: "7.11", key: "kernel.kptr_restrict", value: 2}
+  - {id: "7.12", key: "kernel.yama.ptrace_scope", value: 1}
+  # 7.13 - target 2 (disabled + locked), not 1: this key can only ever INCREASE,
+  # so on hosts where it is already 2 (Ubuntu 24.04 default) writing 1 is refused
+  # (EPERM) and would fail the reload. 2 is also strictly stronger. Irreversible
+  # at runtime until reboot (like 7.18).
+  - {id: "7.13", key: "kernel.unprivileged_bpf_disabled", value: 2}
+  # --- Filesystem (7.15-7.17) ---
+  - {id: "7.15", key: "fs.suid_dumpable", value: 0}
+  - {id: "7.16", key: "fs.protected_hardlinks", value: 1}
+  - {id: "7.16", key: "fs.protected_symlinks", value: 1}
+  - {id: "7.17", key: "fs.protected_fifos", value: 2}
+  - {id: "7.17", key: "fs.protected_regular", value: 2}
+
+# 7.7 - IP forwarding value (0 = off, recommended; 1 = on for routers/containers).
+sysctl_ip_forward: 0
+
+# Extra parameters appended after sysctl_settings (later entries win). Use this
+# to override a value or add OPT tunables (e.g. kernel.perf_event_paranoid).
+sysctl_extra_settings: []
