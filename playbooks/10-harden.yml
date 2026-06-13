@@ -61,9 +61,13 @@
       when: enable_services | default(true)
       tags: [services]
 
+    - role: network       # blacklist rare protocols + DNS hardening
+      when: enable_network | default(true)
+      tags: [network]
+
     # TODO next: low-risk roles
     #   - confinement, filesystem,
-    #     integrity, network, cron, boot
+    #     integrity, cron, boot
 
   post_tasks:
     # Flush handlers explicitly so sshd is reloaded ONCE, after every role's

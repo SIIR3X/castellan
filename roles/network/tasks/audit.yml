@@ -1,0 +1,50 @@
+---
+# network (audit) - read-only checks mapped to section 14; no changes.
+
+- name: "Network | Resolve how each rare protocol would load (14.3)"
+  ansible.builtin.command: "modprobe -n -v {{ item }}"
+  register: _net_modprobe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop: "{{ network_blacklist_protocols }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Network | Read effective resolved configuration (14.1)"
+  ansible.builtin.command: systemd-analyze cat-config systemd/resolved.conf
+  register: _net_resolved_cfg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Read NTP synchronisation state (14.2, owned by audit_logging)"
+  ansible.builtin.command: timedatectl show -p NTP --value
+  register: _net_ntp
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Read rp_filter (14.8, owned by firewall)"
+  ansible.builtin.command: sysctl -n net.ipv4.conf.all.rp_filter
+  register: _net_rpfilter
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Report section 14 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _net_report | from_yaml }}
+  vars:
+    _net_report: |
+      {% for r in _net_modprobe.results %}
+      - "14.3 {{ r.item }} disabled: {{ 'ok' if '/bin/true' in (r.stdout | default('')) else 'FAIL' }}"
+      {% endfor %}
+      - "14.1 DNSSEC={{ network_dnssec }}: {{ 'ok' if 'DNSSEC=' ~ network_dnssec in (_net_resolved_cfg.stdout | default('')) else 'FAIL' }}"
+      - "14.2 time sync active (audit_logging): {{ 'ok' if (_net_ntp.stdout | default('') | trim) == 'yes' else 'FAIL' }}"
+      - "14.8 rp_filter anti-spoof (firewall): {{ 'ok' if (_net_rpfilter.stdout | default('') | trim) == '1' else 'FAIL' }}"
