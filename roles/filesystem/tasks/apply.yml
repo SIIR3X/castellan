@@ -1,0 +1,56 @@
+---
+# filesystem (apply) - harden temp mounts and sensitive file perms (section 9).
+# fstab is backed up first so rollback can restore it. Mount changes apply now
+# (ansible.posix.mount state=mounted) and persist via fstab.
+
+- name: "Filesystem | Back up /etc/fstab before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: /etc/fstab
+
+# --- 9.7 Strict permissions on sensitive files (CRIT) ------------------------
+- name: "Filesystem | Enforce permissions on sensitive files (9.7)"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+    state: file
+  become: true
+  loop: "{{ filesystem_sensitive_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# --- 9.1 Harden /tmp ---------------------------------------------------------
+- name: "Filesystem | Mount /tmp as a hardened tmpfs (9.1)"
+  ansible.posix.mount:
+    path: /tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ filesystem_tmp_opts }}"
+    state: mounted
+  become: true
+  when: filesystem_harden_tmp | bool
+
+# --- 9.2 Harden /dev/shm and (opt-in) /var/tmp -------------------------------
+- name: "Filesystem | Harden /dev/shm mount options (9.2)"
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ filesystem_dev_shm_opts }}"
+    state: mounted
+  become: true
+  when: filesystem_harden_dev_shm | bool
+
+- name: "Filesystem | Mount /var/tmp as a hardened tmpfs (9.2)"
+  ansible.posix.mount:
+    path: /var/tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ filesystem_tmp_opts }}"
+    state: mounted
+  become: true
+  when: filesystem_harden_var_tmp | bool

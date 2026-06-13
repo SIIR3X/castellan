@@ -1,0 +1,4 @@
+---
+# filesystem edits /etc/fstab (via ansible.posix.mount) and file permissions;
+# it backs up fstab via backup_config inside apply.yml.
+dependencies: []

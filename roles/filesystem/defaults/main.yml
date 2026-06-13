@@ -1,0 +1,26 @@
+---
+# filesystem role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 9 (filesystem & mounts). Mixed risk:
+# 9.7 (sensitive file permissions) is safe and CRIT; the mount hardening adds
+# noexec/nosuid/nodev to temp filesystems (noexec on /tmp can upset some
+# installers, hence per-mount toggles). SUID/world-writable/unowned scans are
+# AUDIT-only - the tool reports them but never blindly chmods arbitrary files.
+# OPT measures 9.3/9.8/9.9/9.10 are out of scope.
+
+# --- 9.1 / 9.2 Mount hardening (tmpfs with noexec,nosuid,nodev) ---------------
+filesystem_harden_tmp: true          # /tmp as a hardened tmpfs
+filesystem_harden_dev_shm: true      # add noexec to /dev/shm
+# /var/tmp as tmpfs is volatile (loses cross-reboot persistence), so opt-in.
+filesystem_harden_var_tmp: false
+filesystem_tmp_opts: "rw,nosuid,nodev,noexec,mode=1777"
+filesystem_dev_shm_opts: "rw,nosuid,nodev,noexec,inode64"
+
+# --- 9.7 Strict permissions on sensitive files (CRIT) ------------------------
+# Ubuntu uses the 'shadow' group for shadow files (0640). Adjust if your distro
+# differs.
+filesystem_sensitive_files:
+  - {path: /etc/passwd, owner: root, group: root, mode: "0644"}
+  - {path: /etc/group, owner: root, group: root, mode: "0644"}
+  - {path: /etc/shadow, owner: root, group: shadow, mode: "0640"}
+  - {path: /etc/gshadow, owner: root, group: shadow, mode: "0640"}
