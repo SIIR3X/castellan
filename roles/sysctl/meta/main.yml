@@ -1,0 +1,4 @@
+---
+# sysctl writes a single sysctl.d drop-in; it backs that file up via
+# backup_config inside apply.yml rather than as a hard role dependency.
+dependencies: []

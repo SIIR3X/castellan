@@ -1,0 +1,26 @@
+---
+# sysctl (apply) - deploy kernel/network/filesystem hardening (section 7).
+#
+# A single templated /etc/sysctl.d drop-in + one reload via handler keeps the
+# role fully idempotent (the ansible.posix.sysctl module reports spurious
+# changes on some keys). Low lockout risk: no SSH/firewall path is touched.
+
+# Filename sorts AFTER the distro's 99-protect-links.conf (and 99-sysctl.conf):
+# sysctl.d files are applied by ascending basename, last wins. protect-links
+# resets fs.protected_fifos=1, so a 90- name would be overridden; 99-zz- wins.
+- name: "Sysctl | Back up the drop-in before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: /etc/sysctl.d/99-zz-castellan-sysctl.conf
+
+- name: "Sysctl | Deploy kernel/network/filesystem parameters (section 7)"
+  ansible.builtin.template:
+    src: 99-zz-castellan-sysctl.conf.j2
+    dest: /etc/sysctl.d/99-zz-castellan-sysctl.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: "Sysctl | Reload sysctl"

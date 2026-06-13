@@ -1,0 +1,5 @@
+# Managed by Castellan - kernel/network/filesystem hardening (section 7).
+# Do not edit by hand; managed by the sysctl role.
+{% for s in (sysctl_settings + sysctl_extra_settings) %}
+{{ s.key }} = {{ s.value }}
+{% endfor %}
