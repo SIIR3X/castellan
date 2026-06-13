@@ -1,0 +1,86 @@
+---
+# audit_logging (audit) - read-only checks of section 11; never changes the host.
+
+- name: "Audit logging | Check whether auditd is installed"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' auditd
+  register: _al_auditd_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Audit logging | Read auditd service state"
+  ansible.builtin.command: systemctl is-active auditd  # noqa: command-instead-of-module
+  register: _al_auditd_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Audit logging | List loaded audit rules"
+  ansible.builtin.command: auditctl -l
+  register: _al_rules
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Audit logging | Read effective journald configuration"
+  ansible.builtin.command: systemd-analyze cat-config systemd/journald.conf
+  register: _al_journald
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Audit logging | Stat persistent journal directory"
+  ansible.builtin.stat:
+    path: /var/log/journal
+  register: _al_journal_dir
+  become: true
+
+- name: "Audit logging | Read NTP synchronisation state"
+  ansible.builtin.command: timedatectl show -p NTP -p NTPSynchronized --value
+  register: _al_ntp
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Audit logging | Stat session log files (11.8)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _al_session_logs
+  loop:
+    - /var/log/wtmp
+    - /var/log/btmp
+    - /var/log/lastlog
+  become: true
+
+- name: "Audit logging | Report section 11 compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        11.1 auditd installed:
+        {{ 'ok' if 'install ok installed' in (_al_auditd_pkg.stdout | default('')) else 'FAIL' }}
+      - >-
+        11.1 auditd active:
+        {{ 'ok' if (_al_auditd_active.stdout | default('') | trim) == 'active' else 'FAIL' }}
+      - >-
+        11.2 castellan audit rules loaded:
+        {{ 'ok' if (audit_logging_rules_key_prefix ~ '_') in (_al_rules.stdout | default('')) else 'FAIL' }}
+      - >-
+        11.4 journald Storage=persistent:
+        {{ 'ok' if 'Storage=persistent' in (_al_journald.stdout | default('')) else 'FAIL' }}
+      - >-
+        11.4 persistent journal directory:
+        {{ 'ok' if _al_journal_dir.stat.exists else 'FAIL' }}
+      - >-
+        11.5 journald SystemMaxUse set:
+        {{ 'ok' if 'SystemMaxUse=' ~ journald_system_max_use in (_al_journald.stdout | default('')) else 'FAIL' }}
+      - >-
+        11.8 session logs present (wtmp/btmp/lastlog):
+        {{ 'ok' if (_al_session_logs.results | map(attribute='stat.exists') | select | list | length) == 3 else 'FAIL' }}
+      - >-
+        11.9 time synchronisation active:
+        {{ 'ok' if 'yes' in (_al_ntp.stdout | default('')) else 'FAIL' }}
