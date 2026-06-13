@@ -1,0 +1,82 @@
+---
+# filesystem (audit) - read-only checks mapped to section 9; no changes.
+
+- name: "Filesystem | Read mount options for temp filesystems (9.1/9.2)"
+  ansible.builtin.command: "findmnt -no OPTIONS {{ item }}"
+  register: _fs_mounts
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop:
+    - /tmp
+    - /dev/shm
+    - /var/tmp
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Filesystem | Count SUID/SGID binaries (9.4)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find /usr /bin /sbin /opt -xdev -type f \( -perm -4000 -o -perm -2000 \) 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: _fs_suid
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Filesystem | Count world-writable files/dirs without sticky bit (9.5)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find / -xdev -type d -perm -0002 ! -perm -1000 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: _fs_ww
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Filesystem | Count files without a known owner/group (9.6)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find / -xdev \( -nouser -o -nogroup \) 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: _fs_unowned
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Filesystem | Stat sensitive files (9.7)"
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  register: _fs_sensitive
+  loop: "{{ filesystem_sensitive_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  become: true
+
+- name: "Filesystem | Report section 9 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _fs_report | from_yaml }}
+  vars:
+    _fs_req: [noexec, nosuid, nodev]
+    _fs_tmp: "{{ _fs_mounts.results[0].stdout | default('') }}"
+    _fs_shm: "{{ _fs_mounts.results[1].stdout | default('') }}"
+    _fs_ww_n: "{{ _fs_ww.stdout | default('0') | trim | int }}"
+    _fs_un_n: "{{ _fs_unowned.stdout | default('0') | trim | int }}"
+    _fs_report: |
+      - "9.1 /tmp hardened: {{ 'ok' if (_fs_req | reject('in', _fs_tmp) | list | length == 0) else 'FAIL' }}"
+      - "9.2 /dev/shm hardened: {{ 'ok' if (_fs_req | reject('in', _fs_shm) | list | length == 0) else 'FAIL' }}"
+      - "9.4 SUID/SGID binaries (review): {{ _fs_suid.stdout | default('?') | trim }}"
+      - "9.5 world-writable dirs w/o sticky: {{ 'ok' if _fs_ww_n | int == 0 else 'FAIL (' ~ _fs_ww_n ~ ')' }}"
+      - "9.6 files without owner/group: {{ 'ok' if _fs_un_n | int == 0 else 'FAIL (' ~ _fs_un_n ~ ')' }}"
+      {% for r in _fs_sensitive.results %}
+      {% set ok = r.stat.exists and r.stat.mode == r.item.mode and r.stat.pw_name == r.item.owner and r.stat.gr_name == r.item.group %}
+      - "9.7 {{ r.item.path }} ({{ r.item.mode }} {{ r.item.owner }}:{{ r.item.group }}): {{ 'ok' if ok else 'FAIL' }}"
+      {% endfor %}
