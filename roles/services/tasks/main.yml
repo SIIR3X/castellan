@@ -1,0 +1,11 @@
+---
+# services - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit -> read-only inventory of packages/units/ports; apply -> minimize them.
+
+- name: "Services | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Services | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'

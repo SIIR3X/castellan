@@ -1,0 +1,4 @@
+---
+# services purges packages and disables units; it backs up the one file it may
+# edit (postfix main.cf) via backup_config inside apply.yml when relevant.
+dependencies: []

@@ -1,0 +1,47 @@
+---
+# services role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 10 (service & package
+# minimization). Medium lockout risk: the lists are EXPLICIT and conservative,
+# every action is gated on the package/unit actually being present, and nothing
+# here touches ssh, the firewall, networking or name resolution. OPT measures
+# 10.5 (remove compilers) and 10.6 (disable IPv6) are out of scope.
+
+# 10.1 - legacy / insecure network packages to purge if installed.
+services_unwanted_packages:
+  - telnetd
+  - telnet
+  - inetutils-telnet
+  - rsh-server
+  - rsh-client
+  - rsh-redone-server
+  - rsh-redone-client
+  - talk
+  - talkd
+  - nis
+  - tftpd-hpa
+  - tftp
+  - tftp-hpa
+  - xinetd
+  - ftp
+
+# 10.2 - services to stop + disable when present (desktop / rarely needed on a
+# server). Only units that actually exist are touched.
+services_disable:
+  - cups
+  - cups-browsed
+  - avahi-daemon
+  - bluetooth
+  - isc-dhcp-server
+  - slapd
+  - rpcbind
+  - nfs-server
+# Also mask the disabled units (blocks socket/dbus re-activation). Off by
+# default because masking is harder to reverse than disable.
+services_mask: false
+
+# 10.4 - keep a local MTA bound to loopback only (postfix), when installed.
+services_mta_loopback: true
+
+# 10.7 - purge orphaned (auto-installed, now unused) packages.
+services_autoremove: true
