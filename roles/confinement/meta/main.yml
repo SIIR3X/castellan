@@ -1,0 +1,4 @@
+---
+# confinement creates a modprobe drop-in and optional systemd unit drop-ins; it
+# backs up the modprobe file via backup_config inside apply.yml.
+dependencies: []
