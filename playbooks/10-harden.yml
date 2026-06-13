@@ -65,9 +65,12 @@
       when: enable_network | default(true)
       tags: [network]
 
+    - role: confinement   # AppArmor enforce + rare-FS blacklist (opt-in)
+      when: enable_confinement | default(false)
+      tags: [confinement]
+
     # TODO next: low-risk roles
-    #   - confinement, filesystem,
-    #     integrity, cron, boot
+    #   - filesystem, integrity, cron, boot
 
   post_tasks:
     # Flush handlers explicitly so sshd is reloaded ONCE, after every role's

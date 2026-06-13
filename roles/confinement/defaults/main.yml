@@ -1,0 +1,32 @@
+---
+# confinement role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 8 (confinement & isolation). This
+# role is disabled by default (enable_confinement: false) because enforcing
+# AppArmor and sandboxing units can break bespoke workloads; enable it once you
+# have validated your services. OPT measures 8.5/8.6/8.7/8.9 are out of scope.
+
+# --- 8.1 / 8.2 AppArmor -------------------------------------------------------
+confinement_apparmor: true
+# Switch complain-mode profiles to enforce. Excluded profiles stay as-is.
+confinement_apparmor_enforce_all: true
+confinement_apparmor_enforce_exclude: []
+
+# --- 8.8 Disable loading of rare filesystem modules --------------------------
+# "install <mod> /bin/true" blocks even an explicit modprobe.
+confinement_blacklist_fs_modules:
+  - cramfs
+  - freevxfs
+  - jffs2
+  - hfs
+  - hfsplus
+  - udf
+
+# --- 8.3 / 8.4 systemd unit sandboxing (opt-in) ------------------------------
+# ProtectSystem=strict / ProtectHome / etc. break services that write outside
+# the usual paths, so this is applied ONLY to units you list here (names without
+# the .service suffix). Empty by default = no unit is touched.
+confinement_harden_units: []
+# Restart the listed units so the sandbox takes effect immediately (otherwise it
+# applies on the next restart). Off by default to avoid surprise interruptions.
+confinement_harden_restart: false

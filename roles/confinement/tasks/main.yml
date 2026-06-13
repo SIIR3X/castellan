@@ -1,0 +1,11 @@
+---
+# confinement - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit -> read-only checks; apply -> AppArmor enforce + module/unit sandboxing.
+
+- name: "Confinement | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Confinement | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'
