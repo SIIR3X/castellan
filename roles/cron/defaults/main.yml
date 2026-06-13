@@ -1,0 +1,18 @@
+---
+# cron role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 16 (cron & scheduled tasks). Low
+# lockout risk: it whitelists who may use cron/at and tightens crontab
+# permissions; system cron jobs (run as root from /etc/cron.*) are unaffected.
+# Listing scheduled tasks (16.3) is AUDIT-only. OPT 16.4 is out of scope.
+
+# 16.1 - restrict cron/at to a whitelist (cron.allow / at.allow). When these
+# files exist, only the listed users may use the crontab/at commands.
+cron_restrict_access: true
+cron_allow_users:
+  - root
+  - "{{ admin_user | default('root') }}"
+
+# 16.2 - permissions on crontab files and directories.
+cron_dir_mode: "0700"
+cron_file_mode: "0600"
