@@ -1,6 +1,6 @@
 # Managed by Castellan - audit rules (11.2). Do not edit by hand.
-# CIS-style coverage; intentionally NOT immutable (no '-e 2', 11.3 is OPT) so
-# the rules reload without a reboot and the role stays idempotent.
+# CIS-style coverage; immutability ('-e 2', 11.3) is appended at the very end
+# only when audit_logging_immutable is true (it locks the rules until reboot).
 
 # Identity and account files
 -w /etc/passwd -p wa -k {{ audit_logging_rules_key_prefix }}_identity
@@ -38,3 +38,8 @@
 -w /etc/pam.d/ -p wa -k {{ audit_logging_rules_key_prefix }}_pam
 -w /etc/ssh/sshd_config -p wa -k {{ audit_logging_rules_key_prefix }}_sshd
 -w /etc/ssh/sshd_config.d/ -p wa -k {{ audit_logging_rules_key_prefix }}_sshd
+{% if audit_logging_immutable | bool %}
+
+# 11.3 - lock the rule set (immutable until reboot). MUST be the last directive.
+-e 2
+{% endif %}

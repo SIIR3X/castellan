@@ -23,6 +23,8 @@
     - /etc/ufw/user6.rules
     - /etc/ufw/ufw.conf
     - /etc/default/ufw
+    - /etc/ufw/before.rules
+    - /etc/ufw/before6.rules
 
 - name: "Firewall | Keep IPv6 filtering consistent with IPv4 (4.8)"
   ansible.builtin.lineinfile:
@@ -90,3 +92,16 @@
   become: true
   when: ufw_antispoof | bool
   notify: "Firewall | Reload sysctl"
+
+# --- 4.9 Drop ICMP echo-request (ping) ---------------------------------------
+- name: "Firewall | Drop ICMP echo-request in before.rules (4.9)"
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '^(-A ufw-before-input -p (?:icmp|ipv6-icmp) --icmp(?:v6)?-type echo-request -j )ACCEPT$'
+    replace: '\1DROP'
+  become: true
+  loop:
+    - /etc/ufw/before.rules
+    - /etc/ufw/before6.rules
+  when: ufw_block_icmp_echo | bool
+  notify: "Firewall | Reload ufw"

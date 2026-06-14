@@ -54,3 +54,93 @@
     state: mounted
   become: true
   when: filesystem_harden_var_tmp | bool
+
+# --- 9.3 Harden /home (only when it is a separate mount) ---------------------
+- name: "Filesystem | Locate /home as a separate mount (9.3)"
+  ansible.builtin.set_fact:
+    _fs_home: "{{ ansible_mounts | default([]) | selectattr('mount', 'equalto', '/home') | list | first | default({}) }}"
+  when: filesystem_harden_home | bool
+
+- name: "Filesystem | Add nosuid,nodev to /home (9.3)"
+  ansible.posix.mount:
+    path: /home
+    src: "{{ _fs_home.device }}"
+    fstype: "{{ _fs_home.fstype }}"
+    opts: "{{ ((_fs_home.options | default('defaults')).split(',') + ['nosuid', 'nodev']) | unique | join(',') }}"
+    state: mounted
+  become: true
+  when:
+    - filesystem_harden_home | bool
+    - _fs_home.device is defined
+
+# --- 9.9 Disable USB mass-storage automount ---------------------------------
+- name: "Filesystem | Blacklist USB mass-storage modules (9.9)"
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/castellan-usb.conf
+    content: |
+      # Managed by Castellan (9.9) - disable USB mass-storage automount.
+      {% for m in filesystem_usb_modules %}
+      install {{ m }} /bin/true
+      blacklist {{ m }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: filesystem_disable_usb | bool
+
+# --- 9.10 Disk quotas (opt-in, advanced) ------------------------------------
+- name: "Filesystem | Quota tooling and enablement (9.10)"
+  when: filesystem_enable_quotas | bool
+  block:
+    - name: "Filesystem | Install quota tools (9.10)"
+      ansible.builtin.apt:
+        name: quota
+        state: present
+        install_recommends: false
+      become: true
+
+    - name: "Filesystem | Locate the quota mount (9.10)"
+      ansible.builtin.set_fact:
+        _fs_q: "{{ ansible_mounts | default([]) | selectattr('mount', 'equalto', filesystem_quota_mount) | list | first | default({}) }}"
+
+    - name: "Filesystem | Enable usrquota/grpquota on the mount (9.10)"
+      ansible.posix.mount:
+        path: "{{ filesystem_quota_mount }}"
+        src: "{{ _fs_q.device }}"
+        fstype: "{{ _fs_q.fstype }}"
+        opts: "{{ ((_fs_q.options | default('defaults')).split(',') + ['usrquota', 'grpquota']) | unique | join(',') }}"
+        state: mounted
+      become: true
+      when: _fs_q.device is defined
+
+    - name: "Filesystem | Turn on quotas for the mount (9.10)"
+      ansible.builtin.command: "quotaon -ug {{ filesystem_quota_mount }}"
+      become: true
+      register: _fs_quotaon
+      changed_when: "'already on' not in (_fs_quotaon.stderr | default(''))"
+      failed_when: false
+      when: _fs_q.device is defined
+
+# --- 9.4 / 9.5 / 9.6 Targeted remediation (opt-in lists; default no-op) ------
+- name: "Filesystem | Strip SUID/SGID bit from listed binaries (9.4)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "u-s,g-s"
+  become: true
+  loop: "{{ filesystem_suid_strip }}"
+
+- name: "Filesystem | Remove world-write from listed paths (9.5)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "o-w"
+  become: true
+  loop: "{{ filesystem_world_writable_fix }}"
+
+- name: "Filesystem | Chown listed unowned paths to root (9.6)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+  become: true
+  loop: "{{ filesystem_unowned_chown }}"

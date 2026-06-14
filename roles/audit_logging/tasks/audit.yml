@@ -25,6 +25,20 @@
   check_mode: false
   become: true
 
+- name: "Audit logging | Read auditd status (immutability) (11.3)"
+  ansible.builtin.command: auditctl -s
+  register: _al_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Audit logging | Stat the remote-syslog drop-in (11.6)"
+  ansible.builtin.stat:
+    path: /etc/rsyslog.d/99-castellan-remote.conf
+  register: _al_remote
+  become: true
+
 - name: "Audit logging | Read effective journald configuration"
   ansible.builtin.command: systemd-analyze cat-config systemd/journald.conf
   register: _al_journald
@@ -84,3 +98,11 @@
       - >-
         11.9 time synchronisation active:
         {{ 'ok' if 'yes' in (_al_ntp.stdout | default('')) else 'FAIL' }}
+      - >-
+        11.3 audit rules immutable:
+        {{ ('ok' if 'enabled 2' in (_al_status.stdout | default('')) else 'FAIL')
+           if audit_logging_immutable else 'off' }}
+      - >-
+        11.6 remote syslog forwarding:
+        {{ ('ok' if _al_remote.stat.exists else 'FAIL')
+           if audit_logging_remote_syslog else 'off' }}

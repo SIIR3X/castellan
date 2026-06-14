@@ -33,3 +33,21 @@ ssh_use_dns: "no"
 
 # 2.18 - remove weak/legacy host keys (ecdsa, dsa); ed25519 + rsa are kept.
 ssh_remove_weak_host_keys: true
+
+# 2.14 - pre-authentication banner (OPT). Off by default; when true the text
+# below is written to /etc/issue.net and shown before login.
+ssh_banner: false
+ssh_banner_text: |
+  ******************************************************************
+  Authorized access only. All activity may be monitored and logged.
+  Disconnect now if you are not an authorized user.
+  ******************************************************************
+
+# 2.17 - restrict the listen address family (OPT): any | inet (IPv4) | inet6.
+# Leave "any" unless the host is deliberately single-stack.
+ssh_address_family: any
+
+# 3.2 - also accept FIDO2/U2F security keys (sk-ssh-ed25519) on top of the
+# standard algorithms (OPT). The hardened list otherwise allows only ed25519/rsa
+# and would reject hardware keys.
+ssh_allow_fido2: false

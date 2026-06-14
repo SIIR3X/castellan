@@ -20,6 +20,7 @@
     - /etc/audit/rules.d/castellan.rules
     - /etc/systemd/journald.conf.d/99-castellan-journald.conf
     - /etc/rsyslog.d/99-castellan-perms.conf
+    - /etc/rsyslog.d/99-castellan-remote.conf
 
 # --- 11.1 / 11.2 auditd -------------------------------------------------------
 - name: "Audit logging | Install auditd (11.1)"
@@ -81,6 +82,23 @@
   become: true
   when:
     - audit_logging_rsyslog_perms | bool
+    - "'install ok installed' in (_al_rsyslog_pkg.stdout | default(''))"
+  notify: "Audit logging | Restart rsyslog"
+
+# --- 11.6 forward logs to a remote syslog server (opt-in) --------------------
+- name: "Audit logging | Forward logs to a remote syslog server (11.6)"
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/99-castellan-remote.conf
+    content: |
+      # Managed by Castellan (11.6) - forward all logs to a remote collector.
+      *.* @@{{ audit_logging_syslog_target }}
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when:
+    - audit_logging_remote_syslog | bool
+    - audit_logging_syslog_target | length > 0
     - "'install ok installed' in (_al_rsyslog_pkg.stdout | default(''))"
   notify: "Audit logging | Restart rsyslog"
 

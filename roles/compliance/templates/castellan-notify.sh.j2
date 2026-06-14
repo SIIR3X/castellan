@@ -1,0 +1,16 @@
+#!/bin/sh
+# Managed by Castellan (18.5) - security-event notification on SSH login.
+# Called by pam_exec from the sshd PAM session stack. Do not edit by hand.
+[ "$PAM_TYPE" = "open_session" ] || exit 0
+host="$(hostname)"
+msg="Castellan alert: SSH session opened user=${PAM_USER} from=${PAM_RHOST:-local} on ${host} at $(date -u +%FT%TZ)"
+{% if notify_email | default('') | length > 0 %}
+if command -v mail >/dev/null 2>&1; then
+  printf '%s\n' "${msg}" | mail -s "Castellan: SSH login on ${host}" "{{ notify_email }}" &
+else
+  logger -t castellan-alert "${msg}"
+fi
+{% else %}
+logger -t castellan-alert "${msg}"
+{% endif %}
+exit 0

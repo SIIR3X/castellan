@@ -46,3 +46,4 @@
       {% for line in _cron_tasks.stdout_lines | default([]) %}
       - "16.3 {{ line }}"
       {% endfor %}
+      - "16.4 timers to mask: {{ cron_disable_timers | join(', ') if cron_disable_timers | length > 0 else 'off' }}"

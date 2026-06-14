@@ -11,35 +11,82 @@
 castellan_mode: apply
 
 # ---------------------------------------------------------------------------
-# Hardening profile - selects which measures run, by priority.
-#   minimal  : essential CRIT + IMP
-#   standard : CRIT + IMP + REC      (recommended default)
-#   paranoid : everything, including OPT
+# Hardening profile - selects which roles run.
+#   minimal  : the lockout-critical spine + security updates + reporting
+#   standard : minimal + all low-risk hardening roles  (recommended default)
+#   paranoid : standard + the opt-in roles (confinement, integrity, boot)
+# Override per run with `-e hardening_profile=paranoid` or per host in host_vars.
+# An unknown profile name falls back to standard (the harden play also asserts).
 # ---------------------------------------------------------------------------
 hardening_profile: standard
 
+castellan_profiles:
+  minimal:
+    - accounts
+    - ssh
+    - firewall
+    - fail2ban
+    - updates
+    - compliance
+  standard:
+    - accounts
+    - ssh
+    - firewall
+    - fail2ban
+    - updates
+    - sysctl
+    - pam
+    - audit_logging
+    - services
+    - network
+    - filesystem
+    - cron
+    - compliance
+  paranoid:
+    - accounts
+    - ssh
+    - firewall
+    - fail2ban
+    - updates
+    - sysctl
+    - pam
+    - audit_logging
+    - services
+    - network
+    - filesystem
+    - cron
+    - compliance
+    - confinement
+    - integrity
+    - boot
+
+# Role set selected by the active profile (falls back to standard for an unknown
+# profile name).
+castellan_active_roles: "{{ castellan_profiles[hardening_profile] | default(castellan_profiles['standard']) }}"
+
 # ---------------------------------------------------------------------------
-# Module toggles - enable/disable each role independently. Roles are added
-# incrementally across phases; a disabled (or not-yet-implemented) role is
-# simply skipped.
+# Module toggles - each role runs when its name is in the active profile above.
+# Override any of these per host (host_vars) or per run (-e enable_X=true|false)
+# to force a role on/off regardless of the profile. mfa is in NO profile (it
+# needs TOTP enrollment), so enable it explicitly with enable_mfa: true.
 # ---------------------------------------------------------------------------
-enable_accounts:      true
-enable_ssh:           true
-enable_mfa:           false
-enable_firewall:      true
-enable_fail2ban:      true
-enable_updates:       true
-enable_sysctl:        true
-enable_confinement:   false
-enable_filesystem:    true
-enable_services:      true
-enable_audit_logging: true
-enable_integrity:     false
-enable_pam:           true
-enable_network:       true
-enable_boot:          false
-enable_cron:          true
-enable_compliance:    true
+enable_accounts:      "{{ 'accounts' in castellan_active_roles }}"
+enable_ssh:           "{{ 'ssh' in castellan_active_roles }}"
+enable_mfa:           "{{ 'mfa' in castellan_active_roles }}"
+enable_firewall:      "{{ 'firewall' in castellan_active_roles }}"
+enable_fail2ban:      "{{ 'fail2ban' in castellan_active_roles }}"
+enable_updates:       "{{ 'updates' in castellan_active_roles }}"
+enable_sysctl:        "{{ 'sysctl' in castellan_active_roles }}"
+enable_confinement:   "{{ 'confinement' in castellan_active_roles }}"
+enable_filesystem:    "{{ 'filesystem' in castellan_active_roles }}"
+enable_services:      "{{ 'services' in castellan_active_roles }}"
+enable_audit_logging: "{{ 'audit_logging' in castellan_active_roles }}"
+enable_integrity:     "{{ 'integrity' in castellan_active_roles }}"
+enable_pam:           "{{ 'pam' in castellan_active_roles }}"
+enable_network:       "{{ 'network' in castellan_active_roles }}"
+enable_boot:          "{{ 'boot' in castellan_active_roles }}"
+enable_cron:          "{{ 'cron' in castellan_active_roles }}"
+enable_compliance:    "{{ 'compliance' in castellan_active_roles }}"
 
 # ---------------------------------------------------------------------------
 # Sensible defaults (overridable per host).

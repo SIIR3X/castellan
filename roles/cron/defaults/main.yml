@@ -16,3 +16,7 @@ cron_allow_users:
 # 16.2 - permissions on crontab files and directories.
 cron_dir_mode: "0700"
 cron_file_mode: "0600"
+
+# 16.4 - mask unnecessary systemd timers (opt-in denylist; only what you list is
+# touched, failures on missing units are ignored). Use full unit names.
+cron_disable_timers: []      # e.g. [motd-news.timer, apt-daily-upgrade.timer]

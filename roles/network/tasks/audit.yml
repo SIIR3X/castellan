@@ -36,6 +36,20 @@
   check_mode: false
   become: true
 
+- name: "Network | Stat the wireless-blacklist drop-in (14.4)"
+  ansible.builtin.stat:
+    path: /etc/modprobe.d/castellan-wireless.conf
+  register: _net_wireless
+  become: true
+
+- name: "Network | Read ufw outgoing default policy (14.7)"
+  ansible.builtin.command: ufw status verbose
+  register: _net_ufw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Network | Report section 14 compliance"
   ansible.builtin.debug:
     msg: >-
@@ -48,3 +62,5 @@
       - "14.1 DNSSEC={{ network_dnssec }}: {{ 'ok' if 'DNSSEC=' ~ network_dnssec in (_net_resolved_cfg.stdout | default('')) else 'FAIL' }}"
       - "14.2 time sync active (audit_logging): {{ 'ok' if (_net_ntp.stdout | default('') | trim) == 'yes' else 'FAIL' }}"
       - "14.8 rp_filter anti-spoof (firewall): {{ 'ok' if (_net_rpfilter.stdout | default('') | trim) == '1' else 'FAIL' }}"
+      - "14.4 wireless disabled: {{ 'ok' if _net_wireless.stat.exists else ('FAIL' if network_disable_wireless else 'off') }}"
+      - "14.7 egress filtering: {{ ('ok' if 'deny (outgoing)' in (_net_ufw.stdout | default('')) else 'FAIL') if network_egress_filter else 'off' }}"

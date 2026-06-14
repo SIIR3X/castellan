@@ -31,3 +31,12 @@
       - >-
         2.6 configured port (sshd_config view):
         {{ (_ssh_effective.stdout_lines | default([]) | select('match', '^port ') | list | first | default('port ?')).split()[1] }}
+      - >-
+        2.14 pre-auth banner:
+        {{ 'ok' if ('banner /etc/issue.net' in (_ssh_effective.stdout | default(''))) else ('FAIL' if ssh_banner else 'off') }}
+      - >-
+        2.17 address family:
+        {{ (_ssh_effective.stdout_lines | default([]) | select('match', '^addressfamily ') | list | first | default('addressfamily any')).split()[1] }}
+      - >-
+        3.2 FIDO2 keys accepted:
+        {{ 'ok' if ('sk-ssh-ed25519@openssh.com' in (_ssh_effective.stdout | default(''))) else ('FAIL' if ssh_allow_fido2 else 'off') }}

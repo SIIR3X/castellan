@@ -66,6 +66,18 @@
     mode: "0644"
   become: true
 
+- name: "Accounts | Cap concurrent logins per user (1.14)"
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-castellan-maxlogins.conf
+    content: |
+      # Managed by Castellan (1.14) - cap concurrent sessions per user.
+      * hard maxlogins {{ accounts_max_logins }}
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: (accounts_max_logins | int) > 0
+
 - name: "Accounts | Restrict su to a group via pam_wheel (1.12)"
   ansible.builtin.lineinfile:
     path: /etc/pam.d/su

@@ -4,3 +4,8 @@
     name: postfix
     state: reloaded
   become: true
+
+- name: "Services | Reload sysctl"
+  ansible.builtin.command: sysctl --system  # noqa: command-instead-of-module
+  changed_when: false
+  become: true

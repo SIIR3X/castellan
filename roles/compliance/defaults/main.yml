@@ -18,3 +18,8 @@ compliance_fetch: true
 # configuration drift.
 compliance_periodic_audit: true
 compliance_audit_oncalendar: weekly
+
+# 18.5 - alert on security events (SSH logins) via a PAM hook (opt-in). Sends to
+# notify_email through `mail` when available, otherwise logs to syslog with tag
+# 'castellan-alert' (works without an MTA; pairs with remote syslog / a SIEM).
+compliance_alerting: false

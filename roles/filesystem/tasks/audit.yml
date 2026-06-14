@@ -12,8 +12,15 @@
     - /tmp
     - /dev/shm
     - /var/tmp
+    - /home
   loop_control:
     label: "{{ item }}"
+
+- name: "Filesystem | Stat the USB-blacklist drop-in (9.9)"
+  ansible.builtin.stat:
+    path: /etc/modprobe.d/castellan-usb.conf
+  register: _fs_usb
+  become: true
 
 - name: "Filesystem | Count SUID/SGID binaries (9.4)"
   ansible.builtin.shell: >-
@@ -68,11 +75,16 @@
     _fs_req: [noexec, nosuid, nodev]
     _fs_tmp: "{{ _fs_mounts.results[0].stdout | default('') }}"
     _fs_shm: "{{ _fs_mounts.results[1].stdout | default('') }}"
+    _fs_home: "{{ _fs_mounts.results[3].stdout | default('') }}"
+    _fs_home_ok: "{{ ['nosuid', 'nodev'] | reject('in', _fs_home) | list | length == 0 }}"
+    _fs_home_state: "{{ ('ok' if _fs_home_ok else 'FAIL') if _fs_home | length > 0 else 'n/a (not a separate mount)' }}"
     _fs_ww_n: "{{ _fs_ww.stdout | default('0') | trim | int }}"
     _fs_un_n: "{{ _fs_unowned.stdout | default('0') | trim | int }}"
     _fs_report: |
       - "9.1 /tmp hardened: {{ 'ok' if (_fs_req | reject('in', _fs_tmp) | list | length == 0) else 'FAIL' }}"
       - "9.2 /dev/shm hardened: {{ 'ok' if (_fs_req | reject('in', _fs_shm) | list | length == 0) else 'FAIL' }}"
+      - "9.3 /home nosuid,nodev: {{ _fs_home_state if filesystem_harden_home else 'off' }}"
+      - "9.9 USB storage blacklisted: {{ 'ok' if _fs_usb.stat.exists else ('FAIL' if filesystem_disable_usb else 'off') }}"
       - "9.4 SUID/SGID binaries (review): {{ _fs_suid.stdout | default('?') | trim }}"
       - "9.5 world-writable dirs w/o sticky: {{ 'ok' if _fs_ww_n | int == 0 else 'FAIL (' ~ _fs_ww_n ~ ')' }}"
       - "9.6 files without owner/group: {{ 'ok' if _fs_un_n | int == 0 else 'FAIL (' ~ _fs_un_n ~ ')' }}"

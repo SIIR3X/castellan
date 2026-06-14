@@ -26,16 +26,29 @@ usage() {
 Castellan - agentless Linux hardening, driven by Ansible.
 
 Usage:
-  ./harden init     <host>            Create a per-host config from the template
-  ./harden audit    <host> [args...]  Read-only compliance audit (no changes)
-  ./harden apply    <host> [args...]  Apply hardening
-  ./harden rollback <host> [args...]  Restore the latest backup (or a specific
-                                      run via -e castellan_rollback_stamp=<dir>)
-  ./harden report   <host>            Show the latest report (Phase 3)
-  ./harden help                       Show this help
+  ./harden init     <host>              Create a per-host config from the template
+  ./harden audit    <target> [args...]  Read-only compliance audit (no changes)
+  ./harden apply    <target> [args...]  Apply hardening
+  ./harden rollback <target> [args...]  Restore the latest backup (or a specific
+                                        run via -e castellan_rollback_stamp=<dir>)
+  ./harden report   <target>            Show the latest report per host
+  ./harden help                         Show this help
 
-Any extra args after <host> are passed straight to ansible-playbook, e.g.
+<target> is any Ansible host pattern - a single host, a comma-separated list,
+an inventory group, or 'all'. init always takes a single host. Examples:
+  ./harden apply web1.example.net
+  ./harden audit web1,web2,db1
+  ./harden apply vps                    (all hosts in the 'vps' group)
+  ./harden apply all -e hardening_profile=paranoid
+
+Run only specific roles with --only (an alias for ansible-playbook --tags); the
+bootstrap + verify safety spine always runs first, so this is safe on any host:
+  ./harden apply web1 --only ssh,firewall
+  ./harden audit vps  --only sysctl
+
+Any extra args after <target> are passed straight to ansible-playbook, e.g.
   ./harden apply 203.0.113.42 --ask-pass --tags ssh
+  ./harden apply vps --forks 10 --limit '!db1'
 EOF
 }
 
@@ -46,36 +59,72 @@ require_ansible() {
 }
 
 require_host() {
-  [ -n "${1:-}" ] || { usage; die "Missing <host> argument."; }
+  [ -n "${1:-}" ] || { usage; die "Missing <target> argument."; }
 }
 
+# Expand a target pattern (single host, comma-separated list, group, or 'all')
+# to the concrete hosts it matches in the inventory. Empty if nothing matches.
+resolve_hosts() {
+  ( cd "$REPO_ROOT" && ansible "$1" --list-hosts 2>/dev/null ) \
+    | sed '1d;s/^[[:space:]]*//' | grep -v '^[[:space:]]*$' || true
+}
+
+# Friendly, non-fatal check: warn for every matched host lacking a per-host
+# config. Works for a single host, a list, or a group.
 check_host_vars() {
-  if [ ! -f "${HOST_VARS_DIR}/$1.yml" ]; then
-    warn "No config found at inventory/host_vars/$1.yml"
-    warn "Create it with:  ./harden init $1"
+  local target="$1" hosts h
+  hosts="$(resolve_hosts "$target")"
+  if [ -z "$hosts" ]; then
+    warn "No hosts match '${target}' in the inventory (check inventory/hosts.yml)."
+    return
   fi
+  while IFS= read -r h; do
+    [ -n "$h" ] || continue
+    if [ ! -f "${HOST_VARS_DIR}/${h}.yml" ]; then
+      warn "No config at inventory/host_vars/${h}.yml (create it with: ./harden init ${h})"
+    fi
+  done <<< "$hosts"
 }
 
 # ---- core ------------------------------------------------------------------
+# Translate the friendly `--only <roles>` into Ansible's `--tags <roles>` and
+# populate the REWRITTEN array with the resulting passthrough args. The safety
+# spine (bootstrap + verify) is tagged 'always', so --only never skips it.
+rewrite_only() {
+  REWRITTEN=()
+  local a
+  for a in "$@"; do
+    case "$a" in
+      --only)   REWRITTEN+=(--tags) ;;
+      --only=*) REWRITTEN+=("--tags=${a#--only=}") ;;
+      *)        REWRITTEN+=("$a") ;;
+    esac
+  done
+}
+
 run_playbook() {
-  # args: <host> <mode> [extra ansible-playbook args...]
-  local host="$1" mode="$2"; shift 2
-  local -a cmd=(ansible-playbook "$PLAYBOOK" --limit "$host" --extra-vars "castellan_mode=${mode}")
+  # args: <target> <mode> [extra ansible-playbook args...]
+  # <target> is any Ansible pattern: a host, a comma-list, a group, or 'all'.
+  local target="$1" mode="$2"; shift 2
+  local -a cmd=(ansible-playbook "$PLAYBOOK" --limit "$target" --extra-vars "castellan_mode=${mode}")
   [ "$mode" = "audit" ] && cmd+=(--check --diff)
   info "Running: ${cmd[*]} $*"
   ( cd "$REPO_ROOT" && "${cmd[@]}" "$@" )
 }
 
 run_rollback() {
-  # args: <host> [extra ansible-playbook args...]
-  local host="$1"; shift
-  local -a cmd=(ansible-playbook "${REPO_ROOT}/playbooks/50-rollback.yml" --limit "$host")
+  # args: <target> [extra ansible-playbook args...]
+  local target="$1"; shift
+  local -a cmd=(ansible-playbook "${REPO_ROOT}/playbooks/50-rollback.yml" --limit "$target")
   info "Running: ${cmd[*]} $*"
   ( cd "$REPO_ROOT" && "${cmd[@]}" "$@" )
 }
 
 cmd_init() {
   local host="$1" dest="${HOST_VARS_DIR}/$1.yml"
+  case "$host" in
+    *,*|all) die "init takes a single host, not a list or group ('${host}')." ;;
+  esac
   [ -f "$EXAMPLE_VARS" ] || die "Template not found: $EXAMPLE_VARS"
   [ -f "$dest" ] && die "Config already exists: $dest (edit it, or remove it first)."
   mkdir -p "$HOST_VARS_DIR"
@@ -89,13 +138,19 @@ cmd_init() {
 }
 
 cmd_report() {
-  local host="$1" latest
-  latest="$(ls -1dt "${REPO_ROOT}/reports/${host}_"* 2>/dev/null | head -n1 || true)"
-  if [ -n "$latest" ]; then
-    ok "Latest report: ${latest}"
-  else
-    warn "No report yet for ${host} (reporting lands in Phase 3)."
-  fi
+  local target="$1" hosts h latest
+  if command -v ansible >/dev/null 2>&1; then hosts="$(resolve_hosts "$target")"; fi
+  # Fall back to the raw target (split on commas) when Ansible cannot resolve it.
+  [ -n "${hosts:-}" ] || hosts="${target//,/$'\n'}"
+  while IFS= read -r h; do
+    [ -n "$h" ] || continue
+    latest="$(ls -1dt "${REPO_ROOT}/reports/${h}_"* 2>/dev/null | head -n1 || true)"
+    if [ -n "$latest" ]; then
+      ok "[${h}] Latest report: ${latest}"
+    else
+      warn "[${h}] No report yet."
+    fi
+  done <<< "$hosts"
 }
 
 # ---- dispatch --------------------------------------------------------------
@@ -107,15 +162,18 @@ main() {
     audit)
       require_ansible; require_host "${2:-}"
       local host="$2"; shift 2
-      check_host_vars "$host"; run_playbook "$host" audit "$@" ;;
+      rewrite_only "$@"
+      check_host_vars "$host"; run_playbook "$host" audit ${REWRITTEN[@]+"${REWRITTEN[@]}"} ;;
     apply)
       require_ansible; require_host "${2:-}"
       local host="$2"; shift 2
-      check_host_vars "$host"; run_playbook "$host" apply "$@" ;;
+      rewrite_only "$@"
+      check_host_vars "$host"; run_playbook "$host" apply ${REWRITTEN[@]+"${REWRITTEN[@]}"} ;;
     rollback)
       require_ansible; require_host "${2:-}"
       local host="$2"; shift 2
-      check_host_vars "$host"; run_rollback "$host" "$@" ;;
+      rewrite_only "$@"
+      check_host_vars "$host"; run_rollback "$host" ${REWRITTEN[@]+"${REWRITTEN[@]}"} ;;
     report)
       require_host "${2:-}"; cmd_report "$2" ;;
     help|-h|--help)

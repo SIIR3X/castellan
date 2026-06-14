@@ -42,6 +42,14 @@
   become: true
   when: "'install ok installed' in (_integrity_debsums_pkg.stdout | default(''))"
 
+- name: "Integrity | Check rootkit scanners and ClamAV (12.3/12.4)"
+  ansible.builtin.command: "dpkg-query -W -f='${Package} ${Status}\n' rkhunter chkrootkit clamav"
+  register: _integrity_av
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Integrity | Report section 12 compliance"
   ansible.builtin.debug:
     msg:
@@ -60,3 +68,11 @@
       - >-
         12.5 packages with modified files (review):
         {{ _integrity_debsums.stdout | default('n/a') | trim }}
+      - >-
+        12.3 rkhunter installed:
+        {{ ('ok' if ('rkhunter install ok installed' in (_integrity_av.stdout | default('')))
+            else 'FAIL') if integrity_rkhunter else 'off' }}
+      - >-
+        12.4 ClamAV installed:
+        {{ ('ok' if ('clamav install ok installed' in (_integrity_av.stdout | default('')))
+            else 'FAIL') if integrity_clamav else 'off' }}
