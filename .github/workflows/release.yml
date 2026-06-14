@@ -1,0 +1,107 @@
+---
+name: Release artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build .deb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the Debian package
+        run: |
+          chmod +x packaging/build-deb.sh
+          packaging/build-deb.sh "${GITHUB_REF_NAME#v}" dist
+
+      - name: Verify the package installs and resolves
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ./dist/castellan_*_all.deb
+          command -v castellan
+          castellan help | head -n 1
+
+      - name: Upload the .deb as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb
+
+      - name: Attach the .deb to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/castellan_*_all.deb
+
+  publish-apt:
+    name: Publish apt repository (GitHub Pages)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check the signing key is configured
+        id: guard
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
+            echo "::warning::GPG_PRIVATE_KEY secret not set; skipping apt-repo publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout (scripts)
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/checkout@v4
+
+      - name: Checkout the existing apt repo (gh-pages)
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Install repo tooling
+        if: steps.guard.outputs.skip != 'true'
+        run: sudo apt-get update && sudo apt-get install -y apt-utils gnupg
+
+      - name: Download the built .deb
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: deb
+          path: dist
+
+      - name: Import the signing key
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p pages
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KID="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
+          echo "GPG_KEY_ID=${KID}" >> "$GITHUB_ENV"
+
+      - name: Refresh and sign the apt repository
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          chmod +x packaging/publish-apt.sh
+          packaging/publish-apt.sh pages dist/castellan_*_all.deb
+
+      - name: Deploy to GitHub Pages
+        if: steps.guard.outputs.skip != 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./pages
+          publish_branch: gh-pages
