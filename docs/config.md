@@ -1,225 +1,209 @@
-# Configuration & handling of user input
+# Configuration and user input
 
-> Design document. Defines everything the user must provide to use the tool, the
-> secret / non-secret classification, where each piece of data lives, and the flow of the
-> init wizard. No code. Companions: [architecture.md](./architecture.md),
-> [security-measures.md](./security-measures.md).
+Everything the user provides to Castellan: the fields, the secret versus
+non-secret classification, where each value is stored, and the flow of the init
+wizard.
 
----
+Companion documents: [install.md](./install.md) (set up the control machine),
+[architecture.md](./architecture.md) (how it is built),
+[security-measures.md](./security-measures.md) (the hardening catalogue).
 
 ## 1. Founding principle
 
-> The more secret a piece of data is, the less it should persist.
+The more secret a piece of data is, the less it should persist. Every input falls
+into one of five classes, each handled differently.
 
-Every user input falls into one of these 4 classes, handled differently:
-
-| Class | Persistence | Storage | Versionable (git) |
-|-------|-------------|---------|:-----------------:|
+| Class | Persistence | Storage | Versionable in git |
+|-------|-------------|---------|--------------------|
 | A. Public config | Permanent | Plaintext YAML | yes |
-| B. SSH public key | Permanent | .pub file / path | yes (it is public) |
-| C. Ephemeral secret | None (memory only) | On-the-fly prompt | no (never written) |
-| D. Persistent secret | Permanent but encrypted | Ansible Vault | yes (unreadable without passphrase) |
+| B. SSH public key | Permanent | `.pub` file or path | yes (it is public) |
+| C. Ephemeral secret | None (memory only) | Runtime prompt | no (never written) |
+| D. Persistent secret | Permanent but encrypted | Ansible Vault | yes (unreadable without the passphrase) |
 | E. SSH private key | - | Stays on the control machine | no (never leaves your machine) |
 
----
+## 2. Fields to provide
 
-## 2. Exhaustive list of fields to provide
+The wizard (`castellan init <host>`) collects all of these; you never edit YAML by
+hand. The tables mirror `inventory/host_vars.example.yml`.
 
-### 2.1 Initial connection (first contact with the VPS)
+### 2.1 Initial connection (first contact)
 
 | Field | Class | Required | Description | Example |
-|-------|:-----:|:--------:|-------------|---------|
-| target_ip | A | yes | VPS IP or FQDN | 203.0.113.42 |
-| connection_mode | A | yes | root_password / root_key / user_sudo | root_password |
-| initial_user | A | yes | First-connection account | root |
-| initial_password | C | mode-dependent | Password provided by the host. Single use, never stored. | (prompt) |
-| initial_key | E | mode-dependent | Private key already accepted by the host (if root_key) | ~/.ssh/hoster_key |
-| initial_port | A | yes (default 22) | SSH port at first contact | 22 |
+|-------|-------|----------|-------------|---------|
+| `target_ip` | A | yes | Server IP or FQDN | 203.0.113.42 |
+| `connection_mode` | A | yes | root_password / root_key / user_sudo | root_password |
+| `initial_user` | A | yes | Account used for the first connection | root |
+| `initial_password` | C | mode-dependent | Provided by the host, used once, never stored | (prompt) |
+| `initial_key` | E | mode-dependent | Private key already accepted by the host (root_key) | ~/.ssh/hoster_key |
+| `initial_port` | A | yes (default 22) | SSH port at first contact | 22 |
 
-> Depending on connection_mode, either initial_password (ephemeral prompt) or initial_key
-> (local path) is used. Never both.
+Depending on `connection_mode`, either `initial_password` (an ephemeral prompt) or
+`initial_key` (a local path) is used, never both.
 
 ### 2.2 Admin identity to create
 
 | Field | Class | Required | Description | Default |
-|-------|:-----:|:--------:|-------------|---------|
-| admin_user | A | yes | Name of the non-root user to create | - |
-| admin_pubkey_file | B | yes | Path to the public key to deploy | ~/.ssh/id_ed25519.pub |
-| sudo_mode | A | yes | nopasswd (key only) / password (2nd factor) | nopasswd |
-| admin_password | D | if sudo_mode=password | Sudo password. Randomly generated or entered. Only the hash is stored (Vault). | (generated) |
+|-------|-------|----------|-------------|---------|
+| `admin_user` | A | yes | Name of the non-root user to create | - |
+| `admin_pubkey_file` | B | yes | Path to the public key to deploy | ~/.ssh/id_ed25519.pub |
+| `sudo_mode` | A | yes | nopasswd (key only) / password (second factor) | nopasswd |
+| `admin_password` | D | if `sudo_mode=password` | Sudo password; only the hash is stored, in Vault | (generated) |
 
-> The private key matching admin_pubkey_file is never requested nor handled by
-> the tool: subsequent connections use your ssh-agent.
+The private key matching `admin_pubkey_file` is never requested nor handled by the
+tool; later connections use your `ssh-agent`.
 
-### 2.3 SSH hardening parameters
-
-| Field | Class | Description | Default (standard) |
-|-------|:-----:|-------------|--------------------|
-| ssh_port | A | New SSH port | 22 (or your choice) |
-| ssh_allow_groups | A | Groups allowed to connect | [ssh-users] |
-| ssh_permit_root | A | Root login allowed? | no |
-| ssh_password_auth | A | Password auth allowed? | no |
-
-### 2.4 Firewall parameters (ufw)
+### 2.3 SSH hardening
 
 | Field | Class | Description | Default |
-|-------|:-----:|-------------|---------|
-| ufw_allowed_ports | A | List of ports to open (besides SSH, handled automatically) | [] |
-| ufw_rate_limit_ssh | A | Rate-limit SSH | true |
-| ufw_admin_source_ip | A | Restrict admin to one source IP (optional) | (empty) |
+|-------|-------|-------------|---------|
+| `ssh_port` | A | New SSH port (open it in ufw first) | 22 |
+| `ssh_allow_groups` | A | Groups allowed to connect | [ssh-users] |
+| `ssh_permit_root` | A | Allow root login | "no" |
+| `ssh_password_auth` | A | Allow password auth | "no" |
 
-### 2.5 Fail2ban parameters
-
-| Field | Class | Description | Default |
-|-------|:-----:|-------------|---------|
-| f2b_ignoreip | A | Trusted IPs to never ban (your IP!) | [your IP] |
-| f2b_maxretry | A | Attempts before ban | 3 |
-| f2b_bantime | A | Ban duration | 1h |
-
-### 2.6 Global parameters
+### 2.4 Firewall (ufw)
 
 | Field | Class | Description | Default |
-|-------|:-----:|-------------|---------|
-| hardening_profile | A | minimal / standard / paranoid | standard |
-| enable_<role> | A | Enable/disable each module (ssh, sysctl) | per profile |
-| auto_reboot | A | Auto-reboot if a kernel update requires it | false |
-| notify_email | A | Email for alerts (optional) | (empty) |
+|-------|-------|-------------|---------|
+| `ufw_allowed_ports` | A | Extra ports to open besides SSH | [] |
+| `ufw_rate_limit_ssh` | A | Rate-limit SSH | true |
+| `ufw_admin_source_ip` | A | Restrict admin access to one source IP (optional) | (empty) |
 
----
+### 2.5 Fail2ban
 
-## 3. Where each thing is stored
+| Field | Class | Description | Default |
+|-------|-------|-------------|---------|
+| `f2b_ignoreip` | A | Trusted IPs never banned (add your own) | [] |
+| `f2b_maxretry` | A | Attempts before a ban | 3 |
+| `f2b_bantime` | A | Ban duration | 1h |
+
+### 2.6 Global
+
+| Field | Class | Description | Default |
+|-------|-------|-------------|---------|
+| `hardening_profile` | A | minimal / standard / paranoid | standard |
+| `enable_<role>` | A | Force a role on or off regardless of the profile | per profile |
+| `auto_reboot` | A | Auto-reboot when a kernel update requires it | false |
+| `notify_email` | A | Email for alerts (optional) | (empty) |
+
+## 3. Where each value is stored
 
 ```
-vps-hardening/
-  group_vars/
-    all.yml          <- Class A: global default values (PLAINTEXT)
-    vault.yml        <- Class D: persistent secrets (ENCRYPTED Ansible Vault)
+castellan/
   inventory/
+    group_vars/
+      all.yml              Class A: global defaults (PLAINTEXT)
+      vault.yml            Class D: persistent secrets (ENCRYPTED, Ansible Vault)
     host_vars/
-      203.0.113.42.yml   <- Class A: per-VPS config (PLAINTEXT)
+      203.0.113.42.yml     Class A: per-host config (PLAINTEXT)
   files/
     public_keys/
-      id_ed25519.pub     <- Class B: public key (PLAINTEXT, it is public)
+      id_ed25519.pub       Class B: public key (PLAINTEXT, it is public)
 
-  (Class C) initial_password ... NEVER written: in-memory prompt at runtime
-  (Class E) private key       ... stays in ~/.ssh + ssh-agent, outside the project
+  Class C  initial_password   never written; in-memory prompt at runtime
+  Class E  private key        stays in ~/.ssh and ssh-agent, outside the project
 ```
 
-### Example host_vars/203.0.113.42.yml (plaintext, versionable)
+Installed via apt, the per-host config, keys and vault live under
+`~/.config/castellan/` instead of inside the repository; the storage classes are
+unchanged.
 
-> Illustrative shape - no secret inside:
+Example `host_vars/203.0.113.42.yml`, plaintext and git-safe (no secret inside):
 
 ```
-target_ip:        203.0.113.42
-connection_mode:  root_password
-initial_user:     root
-admin_user:       lucas
+target_ip:         203.0.113.42
+connection_mode:   root_password
+initial_user:      root
+admin_user:        lucas
 admin_pubkey_file: files/public_keys/id_ed25519.pub
-sudo_mode:        nopasswd
-ssh_port:         2222
+sudo_mode:         nopasswd
+ssh_port:          2222
 ufw_allowed_ports: [80, 443]
-f2b_ignoreip:     ["198.51.100.10"]
+f2b_ignoreip:      ["198.51.100.10"]
 hardening_profile: standard
 ```
 
-This file can go into git with no risk: it contains only configuration.
-
----
-
-## 4. Secret handling - strict rules
+## 4. Secret handling rules
 
 | Secret | Rule |
 |--------|------|
-| Initial password (host) | Prompt at runtime (--ask-pass). Never on disk, never in git, never in logs. Cleared from memory after use. |
-| Admin sudo password (if password) | Randomly generated (>= 20 chars) or entered. Shown once to the user. Only the hash is stored, in Vault. |
-| SSH private key | Never read, never copied by the tool. Connection via ssh-agent or local path. |
-| Vault passphrase | Known only to the user. Prompted at runtime if Vault is used. |
-| Logs | Tasks handling secrets are marked "no_log" -> nothing leaks into the output. |
+| Initial host password | Prompted at runtime (`--ask-pass`). Never on disk, in git or in logs. Used once, then dropped. |
+| Admin sudo password (if `sudo_mode=password`) | Generated (20+ chars) or entered, shown once; only the hash is stored, in Vault. |
+| SSH private key | Never read or copied. Connections use `ssh-agent` or a local path. |
+| Vault passphrase | Known only to the user, prompted at runtime when Vault is used. |
+| Logs | Tasks that touch secrets are marked `no_log`, so nothing leaks into the output. |
 
-### Why the initial password does not need to be stored
+Why the initial password need not be stored: it is used only once, in Play 1, to
+create the admin and deploy its key. Right after, hardening disables password auth,
+so the secret becomes useless. Storing it would add risk with no benefit.
 
-It is used only once (Play 1: create the admin + deploy the key). Right after, hardening
-disables password auth -> this secret becomes useless. Storing it would be a risk with no
-benefit.
-
----
-
-## 5. Flow of the ./harden init <ip> wizard
+## 5. The init wizard
 
 The user writes no YAML: the wizard asks the questions and generates the file.
+Where `whiptail` is present the menus are graphical; otherwise a plain text prompt
+is used.
 
 ```
-$ ./harden init 203.0.113.42
+$ castellan init 203.0.113.42
 
   [ Initial connection ]
-  ? Connection mode           > root + password
-  ? Initial user              > root
-  ? Current SSH port          > 22
+  Connection mode           root + password
+  Initial user              root
+  Current SSH port          22
 
   [ Admin user to create ]
-  ? Admin name                > lucas
-  ? Public key to deploy      > ~/.ssh/id_ed25519.pub   [detected]
-  ? Passwordless sudo?        > yes   (recommended, key only)
+  Admin name                lucas
+  Public key to deploy      ~/.ssh/id_ed25519.pub   (detected)
+  Passwordless sudo         yes (recommended, key only)
 
   [ Hardening ]
-  ? Profile                   > standard
-  ? New SSH port              > 2222
-  ? Ports to open (firewall)  > 80, 443
-  ? Your IP (never banned)    > 198.51.100.10   [detected]
+  Profile                   standard
+  New SSH port              2222
+  Ports to open (firewall)  80, 443
+  Your IP (never banned)    198.51.100.10   (detected)
 
-  OK Config written: inventory/host_vars/203.0.113.42.yml
-  OK No secret written to disk.
-  i  The initial password will be requested when running "apply".
+  Config written: inventory/host_vars/203.0.113.42.yml
+  No secret written to disk.
+  The initial password will be requested when running apply.
 
-$ ./harden apply 203.0.113.42
-  ? Initial password (root@203.0.113.42) > ********   [not stored]
-  -> hardening in progress...
+$ castellan apply 203.0.113.42 --ask-pass
+  Initial password (root@203.0.113.42): ********   (not stored)
+  hardening in progress...
 ```
 
-### Auto-detected fields (convenience)
+Fields the wizard can auto-detect for convenience:
 
-| Field | Proposed detection |
-|-------|--------------------|
-| admin_pubkey_file | Scan ~/.ssh/*.pub, propose the key found |
-| f2b_ignoreip | Detect the public IP of the control machine |
-| admin_user | Propose the local username by default |
+| Field | Detection |
+|-------|-----------|
+| `admin_pubkey_file` | Scans `~/.ssh/*.pub` and proposes the key found |
+| `f2b_ignoreip` | Detects the control machine's public IP |
+| `admin_user` | Proposes the local username |
 
----
+After `init`, refine the selection at any time with `castellan configure <host>`,
+which lists every role and lets you tick individual measures or a whole role.
 
-## 6. Input validation (before execution)
+## 6. Input validation
 
-The tool must verify before acting, to avoid errors and lockout:
+Castellan checks the configuration before acting, to avoid errors and lockout.
 
 | Check | Why |
 |-------|-----|
-| The public key exists and is valid | Otherwise admin created without access -> lockout |
-| f2b_ignoreip does contain your IP | Otherwise self-ban is possible |
-| The target SSH port is in the allowed ufw ports | Anti-lockout consistency |
-| Valid IP / port format | Avoids failures mid-execution |
-| connection_mode consistent with provided secrets | password vs key |
-| Initial connectivity tested | Network failure detected early |
+| The public key exists and is valid | Otherwise the admin is created with no access (lockout) |
+| `f2b_ignoreip` contains your IP | Otherwise a self-ban is possible |
+| The target SSH port is among the allowed ufw ports | Anti-lockout consistency |
+| Valid IP and port format | Avoids failures mid-run |
+| `connection_mode` matches the provided secrets | password versus key |
+| Initial connectivity tested | Network failure caught early |
 
----
+## 7. Summary: who provides what
 
-## 7. Summary: who fills in what, and where it ends up
+| The user provides | How | It becomes |
+|-------------------|-----|------------|
+| IP, admin user, ports, profile | init wizard | `host_vars/<host>.yml` (plaintext, git-safe) |
+| Their public key | path (auto-detected) | deployed from `files/public_keys/` |
+| The initial password | prompt at apply | nothing (memory, then forgotten) |
+| Sudo password (if chosen) | generated or prompt | hash in `vault.yml` (encrypted) |
+| Their private key | - | stays on their machine (ssh-agent) |
 
-| The user provides... | How | Becomes... |
-|----------------------|-----|------------|
-| IP, admin user, ports, profile | init wizard | host_vars/<ip>.yml (plaintext, git-safe) |
-| Their public key | Path (auto-detected) | Copied into files/public_keys/ |
-| The initial password | Prompt at apply | Nothing (memory, then forgotten) |
-| Sudo password (if chosen) | Generated / prompt | Hash in vault.yml (encrypted) |
-| Their private key | - | Stays on their machine (ssh-agent) |
-
-Result: the user fills in their info once, without editing any file by hand,
-and no plaintext secret ends up on disk or in git.
-
----
-
-## 8. Open points (to settle before implementation)
-
-1. Interactive wizard vs example file: full wizard, or ship a host_vars.example.yml to copy? (the wizard is safer for beginners)
-2. Prompt format: TUI tool (styled questions) or plain shell read? (depends on the wrapper's language)
-3. Vault always created, or only if sudo_mode=password? (avoid a useless passphrase in the key-only case)
-4. Multi-VPS: one host_vars per machine (already planned) or a "fleet" mode with shared config?
-5. Config reuse: allow shared defaults for all VPS in group_vars/all.yml to avoid re-entering everything?
+The user fills in their details once, edits no file by hand, and no plaintext
+secret ever lands on disk or in git.

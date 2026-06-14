@@ -87,6 +87,10 @@ the configuration model are described in
 
 ## Installation
 
+The essentials are below; see [`docs/install.md`](docs/install.md) for the full
+guide (prerequisites, direct `.deb`, first run, updates, uninstall, building the
+package yourself).
+
 ### Via apt (recommended)
 
 ```bash
@@ -210,6 +214,17 @@ Any extra argument after the target is passed straight to `ansible-playbook`
 
 `mfa` is never enabled by a profile (it needs TOTP enrollment); turn it on with
 `-e enable_mfa=true` or in the selector.
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [`docs/install.md`](docs/install.md) | Install (apt, `.deb`, source), prerequisites, first run, updates, uninstall |
+| [`docs/architecture.md`](docs/architecture.md) | How it is built: roles, the anti-lockout flow, audit/apply, install layouts |
+| [`docs/config.md`](docs/config.md) | What you provide: fields, secret handling, the init wizard |
+| [`docs/security-measures.md`](docs/security-measures.md) | The hardening catalogue: 18 categories with priorities |
+| [`SECURITY.md`](SECURITY.md) | Supported versions and how to report a vulnerability |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 
 ## License
 
