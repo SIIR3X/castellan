@@ -21,6 +21,10 @@ ufw_logging: "on"
 # 4.8 - keep IPv6 filtering consistent with IPv4.
 ufw_ipv6: true
 
+# 4.9 - drop ICMP echo-request (ping) in before.rules (opt-in; ping is a useful
+# diagnostic, so off by default).
+ufw_block_icmp_echo: false
+
 # 4.7 - kernel anti-spoofing. The default before.rules already drops INVALID
 # packets; this adds reverse-path filtering, martian logging and no source
 # routing. (rp_filter=1 is strict; fine for single-homed hosts.)

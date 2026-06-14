@@ -13,12 +13,26 @@
     ansible_port: "{{ initial_port | default(22) }}"
 
   pre_tasks:
+    # Tagged 'always' so the profile check and announce run on targeted
+    # --tags/--only runs too.
+    - name: "Harden | Validate the hardening profile name"
+      ansible.builtin.assert:
+        that:
+          - hardening_profile | default('standard') in castellan_profiles
+        fail_msg: >-
+          Unknown hardening_profile '{{ hardening_profile }}'. Valid profiles:
+          {{ castellan_profiles.keys() | list | join(', ') }}.
+        quiet: true
+      tags: [always]
+
     - name: "Harden | Announce run parameters"
       ansible.builtin.debug:
         msg: >-
           [harden] mode={{ castellan_mode | default('apply') }},
-          profile={{ hardening_profile | default('standard') }}.
+          profile={{ hardening_profile | default('standard') }},
+          roles={{ castellan_active_roles | join(', ') }}.
           Roles run in lockout-safe order.
+      tags: [always]
 
   roles:
     # Lockout-critical first. Each role reads castellan_mode to switch between

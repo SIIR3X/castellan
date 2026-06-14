@@ -74,3 +74,43 @@
         enabled: true
       become: true
       failed_when: false
+
+# --- 12.3 Rootkit scanners (opt-in) ------------------------------------------
+- name: "Integrity | Rootkit scanners (12.3)"
+  when: integrity_rkhunter | bool
+  block:
+    - name: "Integrity | Install rkhunter and chkrootkit (12.3)"
+      ansible.builtin.apt:
+        name: [rkhunter, chkrootkit]
+        state: present
+        install_recommends: false
+      become: true
+      register: _integrity_rk_install
+
+    # Seed the file-property baseline once, right after install, so the daily
+    # check compares against the known-good hardened state.
+    - name: "Integrity | Seed rkhunter property database (12.3)"  # noqa: no-handler
+      ansible.builtin.command: rkhunter --propupd
+      become: true
+      changed_when: true
+      failed_when: false
+      when: _integrity_rk_install.changed
+
+# --- 12.4 ClamAV antivirus (opt-in) ------------------------------------------
+- name: "Integrity | ClamAV antivirus (12.4)"
+  when: integrity_clamav | bool
+  block:
+    - name: "Integrity | Install clamav and freshclam (12.4)"
+      ansible.builtin.apt:
+        name: [clamav, clamav-freshclam]
+        state: present
+        install_recommends: false
+      become: true
+
+    - name: "Integrity | Enable the freshclam signature updater (12.4)"
+      ansible.builtin.systemd_service:
+        name: clamav-freshclam
+        enabled: true
+        state: started
+      become: true
+      failed_when: false

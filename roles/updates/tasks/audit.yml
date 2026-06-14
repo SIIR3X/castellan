@@ -18,6 +18,14 @@
   check_mode: false
   become: true
 
+- name: "Updates | Check apticron is installed (6.8)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' apticron
+  register: _updates_apticron
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Updates | Read the effective allowed origins (6.3)"
   ansible.builtin.command: apt-config dump Unattended-Upgrade::Allowed-Origins
   register: _updates_origins
@@ -62,3 +70,7 @@
       - >-
         6.7 third-party apt sources ({{ _updates_repos.matched | default(0) }}):
         {{ (_updates_repos.files | default([]) | map(attribute='path') | map('basename') | list) | join(', ') | default('none', true) }}
+      - >-
+        6.8 pending-update alerts (apticron):
+        {{ ('ok' if 'install ok installed' in (_updates_apticron.stdout | default('')) else 'FAIL')
+           if updates_pending_alert else 'off' }}

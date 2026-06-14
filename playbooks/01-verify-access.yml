@@ -19,7 +19,10 @@
     ansible_port: "{{ initial_port | default(22) }}"
 
   tasks:
+    # Tagged 'always' so the access safety net runs even on a targeted
+    # --tags/--only run, before any role touches the host.
     - name: "Verify access | Reconnect as the new admin and confirm sudo"
+      tags: [always]
       block:
         - name: "Verify access | Confirm SSH login as '{{ admin_user }}'"
           ansible.builtin.ping:

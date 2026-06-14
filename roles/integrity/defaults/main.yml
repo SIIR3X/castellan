@@ -4,8 +4,9 @@
 # Maps to docs/security-measures.md section 12 (file integrity & anti-malware).
 # No lockout risk: AIDE and debsums are passive. The AIDE baseline is built only
 # when it does not exist yet (or when integrity_aide_reinit is set), since it is
-# slow and must snapshot the already-hardened state. OPT 12.3/12.4/12.6 are out
-# of scope. Scheduled checks (12.1) come from aide-common's /etc/cron.daily/aide.
+# slow and must snapshot the already-hardened state. 12.3 (rkhunter/chkrootkit)
+# and 12.4 (ClamAV) are opt-in below; 12.6 is covered by AIDE + auditd. Scheduled
+# checks (12.1) come from aide-common's daily timer.
 
 # --- 12.1 / 12.2 AIDE ---------------------------------------------------------
 integrity_aide: true
@@ -21,3 +22,10 @@ integrity_aide_timer: dailyaidecheck.timer
 
 # --- 12.5 Verify installed packages ------------------------------------------
 integrity_debsums: true
+
+# --- 12.3 Rootkit scanners (opt-in) ------------------------------------------
+# Installs rkhunter + chkrootkit and seeds rkhunter's property database once.
+integrity_rkhunter: false
+
+# --- 12.4 ClamAV antivirus (opt-in; heavy: RAM + freshclam signature DB) ------
+integrity_clamav: false

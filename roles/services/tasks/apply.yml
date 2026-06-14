@@ -65,6 +65,31 @@
       become: true
       notify: "Services | Reload postfix"
 
+# --- 10.5 Remove compilers / build tools (opt-in) ----------------------------
+- name: "Services | Remove compilers and build tools (10.5)"
+  ansible.builtin.apt:
+    name: "{{ services_compiler_packages }}"
+    state: absent
+    purge: true
+  become: true
+  when: services_remove_compilers | bool
+
+# --- 10.6 Disable IPv6 entirely (opt-in) -------------------------------------
+- name: "Services | Disable IPv6 via sysctl (10.6)"
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-castellan-disable-ipv6.conf
+    content: |
+      # Managed by Castellan (10.6) - disable IPv6 entirely.
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+      net.ipv6.conf.lo.disable_ipv6 = 1
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: services_disable_ipv6 | bool
+  notify: "Services | Reload sysctl"
+
 # --- 10.7 Clean up orphaned packages -----------------------------------------
 - name: "Services | Remove orphaned packages (10.7)"
   ansible.builtin.apt:

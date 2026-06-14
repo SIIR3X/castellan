@@ -6,3 +6,9 @@
   ansible.builtin.command: sysctl --system  # noqa: command-instead-of-module
   changed_when: false
   become: true
+
+# Re-read before.rules after a 4.9 change. ufw is already enabled by this point.
+- name: "Firewall | Reload ufw"
+  ansible.builtin.command: ufw reload  # noqa: command-instead-of-module
+  changed_when: false
+  become: true

@@ -77,3 +77,27 @@
     - apt-daily.timer
     - apt-daily-upgrade.timer
   become: true
+
+# --- 6.8 Pending-update email alerts via apticron (opt-in) -------------------
+- name: "Updates | Pending-update email alerts (6.8)"
+  when:
+    - updates_pending_alert | bool
+    - notify_email | default('') | length > 0
+  block:
+    - name: "Updates | Install apticron (6.8)"
+      ansible.builtin.apt:
+        name: apticron
+        state: present
+        install_recommends: false
+      become: true
+
+    - name: "Updates | Set the apticron recipient (6.8)"
+      ansible.builtin.lineinfile:
+        path: /etc/apticron/apticron.conf
+        regexp: '^\s*EMAIL\s*='
+        line: 'EMAIL="{{ notify_email }}"'
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+      become: true
