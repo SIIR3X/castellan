@@ -5,10 +5,37 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLAYBOOK="${REPO_ROOT}/playbooks/site.yml"
-HOST_VARS_DIR="${REPO_ROOT}/inventory/host_vars"
-EXAMPLE_VARS="${REPO_ROOT}/inventory/host_vars.example.yml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Two layouts are supported transparently:
+#   - source checkout: program and data both live in the repo (unchanged).
+#   - installed (apt): program is read-only under /usr/share/castellan, while
+#     per-user data (host configs, reports, keys) lives under ~/.config/castellan.
+if [ -z "${CASTELLAN_PROG_DIR:-}" ] && [ -d "${SCRIPT_DIR}/playbooks" ] && [ -d "${SCRIPT_DIR}/lib" ] && [ "${SCRIPT_DIR#/usr/}" = "${SCRIPT_DIR}" ]; then
+  PROG_DIR="$SCRIPT_DIR"
+  DATA_DIR="$SCRIPT_DIR"
+  HOST_VARS_DIR="${PROG_DIR}/inventory/host_vars"
+  REPORTS_DIR="${PROG_DIR}/reports"
+  INVENTORY="${PROG_DIR}/inventory/castellan-inventory.sh"
+else
+  PROG_DIR="${CASTELLAN_PROG_DIR:-/usr/share/castellan}"
+  DATA_DIR="${CASTELLAN_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/castellan}"
+  HOST_VARS_DIR="${DATA_DIR}/host_vars"
+  REPORTS_DIR="${DATA_DIR}/reports"
+  INVENTORY="${DATA_DIR}/castellan-inventory.sh"
+fi
+REPO_ROOT="$PROG_DIR"   # back-compat for any internal reference
+PLAYBOOK="${PROG_DIR}/playbooks/site.yml"
+EXAMPLE_VARS="${PROG_DIR}/inventory/host_vars.example.yml"
+
+# Scaffold the per-user data directory on first use (installed mode only).
+ensure_data_dir() {
+  [ "$DATA_DIR" = "$PROG_DIR" ] && return 0
+  mkdir -p "${HOST_VARS_DIR}" "${REPORTS_DIR}" "${DATA_DIR}/public_keys"
+  [ -e "${DATA_DIR}/group_vars" ] || ln -s "${PROG_DIR}/inventory/group_vars" "${DATA_DIR}/group_vars"
+  [ -e "${INVENTORY}" ] || ln -s "${PROG_DIR}/inventory/castellan-inventory.sh" "${INVENTORY}"
+  export ANSIBLE_INVENTORY="${INVENTORY}"
+  export CASTELLAN_HOST_VARS="${HOST_VARS_DIR}"
+}
 
 # ---- output helpers --------------------------------------------------------
 if [ -t 1 ]; then
@@ -117,8 +144,10 @@ run_playbook() {
   local target="$1" mode="$2"; shift 2
   local -a cmd=(ansible-playbook "$PLAYBOOK" --limit "$target" --extra-vars "castellan_mode=${mode}")
   [ "$mode" = "audit" ] && cmd+=(--check --diff)
+  # Installed mode: write fetched reports under the per-user data dir.
+  [ "$DATA_DIR" != "$PROG_DIR" ] && cmd+=(--extra-vars "compliance_report_dir=${REPORTS_DIR}")
   info "Running: ${cmd[*]} $*"
-  ( cd "$REPO_ROOT" && "${cmd[@]}" "$@" )
+  ( cd "$PROG_DIR" && "${cmd[@]}" "$@" )
 }
 
 run_rollback() {
@@ -154,7 +183,7 @@ cmd_report() {
   [ -n "${hosts:-}" ] || hosts="${target//,/$'\n'}"
   while IFS= read -r h; do
     [ -n "$h" ] || continue
-    latest="$(ls -1dt "${REPO_ROOT}/reports/${h}_"* 2>/dev/null | head -n1 || true)"
+    latest="$(ls -1dt "${REPORTS_DIR}/${h}_"* 2>/dev/null | head -n1 || true)"
     if [ -n "$latest" ]; then
       ok "[${h}] Latest report: ${latest}"
     else
@@ -166,6 +195,7 @@ cmd_report() {
 # ---- dispatch --------------------------------------------------------------
 main() {
   local subcmd="${1:-help}"
+  ensure_data_dir
   case "$subcmd" in
     init)
       require_host "${2:-}"; cmd_init "$2" ;;
