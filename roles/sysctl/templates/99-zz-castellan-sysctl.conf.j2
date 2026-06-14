@@ -3,3 +3,13 @@
 {% for s in (sysctl_settings + sysctl_extra_settings) %}
 {{ s.key }} = {{ s.value }}
 {% endfor %}
+{% if sysctl_restrict_perf | bool %}
+kernel.perf_event_paranoid = 3
+{% endif %}
+{% if sysctl_disable_userns | bool %}
+kernel.unprivileged_userns_clone = 0
+{% endif %}
+{% if sysctl_disable_module_load | bool %}
+# 7.18 - lock module loading; IRREVERSIBLE until reboot. Applied last.
+kernel.modules_disabled = 1
+{% endif %}

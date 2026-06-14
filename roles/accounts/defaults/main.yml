@@ -64,3 +64,6 @@ accounts_su_group: sudo
 # 1.13 - remove unused accounts (off by default; audit always reports them).
 accounts_remove_unused: false
 accounts_unused_users: [games, gnats, irc, list, news, uucp]
+
+# 1.14 - cap concurrent logins per user via limits.conf (OPT). 0 = disabled.
+accounts_max_logins: 0

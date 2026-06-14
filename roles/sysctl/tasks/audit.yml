@@ -9,9 +9,14 @@
   failed_when: false
   check_mode: false
   become: true
-  loop: "{{ sysctl_settings + sysctl_extra_settings }}"
+  loop: "{{ sysctl_settings + sysctl_extra_settings + _sysctl_optional }}"
   loop_control:
     label: "{{ item.key }}"
+  vars:
+    _sysctl_optional: >-
+      {{ ([{'id': '7.14', 'key': 'kernel.perf_event_paranoid', 'value': 3}] if sysctl_restrict_perf | bool else [])
+         + ([{'id': '8.5', 'key': 'kernel.unprivileged_userns_clone', 'value': 0}] if sysctl_disable_userns | bool else [])
+         + ([{'id': '7.18', 'key': 'kernel.modules_disabled', 'value': 1}] if sysctl_disable_module_load | bool else []) }}
 
 - name: "Sysctl | Report section 7 compliance"
   ansible.builtin.debug:

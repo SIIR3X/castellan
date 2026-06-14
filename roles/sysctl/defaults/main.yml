@@ -52,3 +52,12 @@ sysctl_ip_forward: 0
 # Extra parameters appended after sysctl_settings (later entries win). Use this
 # to override a value or add OPT tunables (e.g. kernel.perf_event_paranoid).
 sysctl_extra_settings: []
+
+# --- OPT kernel restrictions (off by default; each can break a workload) ------
+# 7.14 - kernel.perf_event_paranoid=3 (blocks unprivileged perf profiling).
+sysctl_restrict_perf: false
+# 8.5 - kernel.unprivileged_userns_clone=0 (breaks rootless containers).
+sysctl_disable_userns: false
+# 7.18 - kernel.modules_disabled=1: lock module loading. IRREVERSIBLE until
+# reboot and applied last; leave off unless you never load modules at runtime.
+sysctl_disable_module_load: false

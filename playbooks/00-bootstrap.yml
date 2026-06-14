@@ -15,7 +15,10 @@
 
   roles:
     # Establish the run-wide backup timestamp/directory first.
+    # Tagged 'always' so the safety spine runs even on a targeted --tags/--only
+    # run (you must never harden a host you have not bootstrapped first).
     - role: backup_config
+      tags: [always]
 
     # Create the admin user, its groups, SSH key and sudoers drop-in.
     # sshd is left untouched here; the ssh role hardens it in Play 3.
@@ -24,3 +27,4 @@
       when: enable_accounts | default(true)
       vars:
         accounts_stage: bootstrap
+      tags: [always]

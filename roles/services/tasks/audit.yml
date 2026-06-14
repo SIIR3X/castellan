@@ -38,6 +38,22 @@
   become: true
   when: "'install ok installed' in (_svc_postfix.stdout | default(''))"
 
+- name: "Services | Read status of compilers/build tools (10.5)"
+  ansible.builtin.command: "dpkg-query -W -f='${Package} ${Status}\n' {{ services_compiler_packages | join(' ') }}"
+  register: _svc_compilers
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Services | Read effective IPv6 disable state (10.6)"
+  ansible.builtin.command: sysctl -n net.ipv6.conf.all.disable_ipv6
+  register: _svc_ipv6
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Services | Simulate orphaned-package cleanup (10.7)"
   ansible.builtin.command: apt-get -s autoremove  # noqa: command-instead-of-module
   register: _svc_autoremove
@@ -62,6 +78,14 @@
         {{ ('ok' if (_svc_postfix_inet.stdout | default('') | trim) in ['loopback-only', 'localhost']
             else 'FAIL')
            if 'install ok installed' in (_svc_postfix.stdout | default('')) else 'skipped (no postfix)' }}
+      - >-
+        10.5 compilers removed:
+        {{ ('ok' if 'install ok installed' not in (_svc_compilers.stdout | default('')) else 'FAIL (some present)')
+           if services_remove_compilers else 'off' }}
+      - >-
+        10.6 IPv6 disabled:
+        {{ ('ok' if (_svc_ipv6.stdout | default('0') | trim) == '1' else 'FAIL')
+           if services_disable_ipv6 else 'off' }}
       - >-
         10.7 no orphaned packages:
         {{ 'ok' if ' 0 to remove' in (_svc_autoremove.stdout | default('')) else 'review (autoremove has candidates)' }}

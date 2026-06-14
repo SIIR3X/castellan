@@ -5,7 +5,7 @@
 # minimization). Medium lockout risk: the lists are EXPLICIT and conservative,
 # every action is gated on the package/unit actually being present, and nothing
 # here touches ssh, the firewall, networking or name resolution. OPT measures
-# 10.5 (remove compilers) and 10.6 (disable IPv6) are out of scope.
+# 10.5 (remove compilers) and 10.6 (disable IPv6) are opt-in (off by default).
 
 # 10.1 - legacy / insecure network packages to purge if installed.
 services_unwanted_packages:
@@ -45,3 +45,12 @@ services_mta_loopback: true
 
 # 10.7 - purge orphaned (auto-installed, now unused) packages.
 services_autoremove: true
+
+# 10.5 - remove compilers / build tools (opt-in; breaks on-box compilation,
+# DKMS, some pip builds). build-essential is the meta-package for gcc/g++/make.
+services_remove_compilers: false
+services_compiler_packages: [build-essential, gcc, g++, clang, llvm]
+
+# 10.6 - disable IPv6 entirely via sysctl (opt-in). We otherwise HARDEN IPv6
+# (sections 7/14); only enable this if the host has no IPv6 connectivity at all.
+services_disable_ipv6: false

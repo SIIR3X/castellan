@@ -80,3 +80,6 @@
       - >-
         1.8 login-enabled system accounts:
         {{ _accounts_syslogin.stdout_lines | length }}
+      - >-
+        1.14 concurrent-login cap:
+        {{ 'off' if (accounts_max_logins | int) == 0 else (accounts_max_logins | string) }}

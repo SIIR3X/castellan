@@ -3,7 +3,9 @@
 #
 # Maps to docs/security-measures.md section 14 (network). Low lockout risk: it
 # blacklists rarely used kernel protocols and hardens systemd-resolved without
-# overriding the active resolver. OPT measures 14.4-14.7 are out of scope.
+# overriding the active resolver. 14.4 (disable wireless) and 14.7 (egress
+# filtering) are opt-in below; 14.5 (TCP wrappers, deprecated) and 14.6 (banner,
+# handled by the ssh role) stay out of scope.
 #
 # 14.2 (time sync) is owned by the audit_logging role (11.9) and 14.8 (rp_filter
 # anti-spoofing) by the firewall role; this role only AUDITS them.
@@ -25,3 +27,18 @@ network_dnssec: allow-downgrade
 network_dns_over_tls: opportunistic
 network_dns_servers: []          # leave empty to keep DHCP / provider DNS
 network_fallback_dns: []         # e.g. ["9.9.9.9", "1.1.1.1"]
+
+# 14.4 - disable wireless interfaces/modules (opt-in; rare on a VPS).
+network_disable_wireless: false
+network_wireless_modules: [cfg80211, mac80211, iwlwifi, ath, brcmsmac]
+
+# 14.7 - egress (outbound) filtering via ufw (opt-in). DANGEROUS if the allowlist
+# is incomplete: it sets ufw default-deny outgoing, so DNS/NTP/HTTP(S) must stay
+# allowed or the host loses connectivity (updates, name resolution).
+network_egress_filter: false
+network_egress_allowed:
+  - {port: 53, proto: udp}
+  - {port: 53, proto: tcp}
+  - {port: 80, proto: tcp}
+  - {port: 443, proto: tcp}
+  - {port: 123, proto: udp}

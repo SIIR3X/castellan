@@ -97,3 +97,13 @@
         path: /etc/at.deny
         state: absent
       become: true
+
+# --- 16.4 Mask unnecessary systemd timers (opt-in) ---------------------------
+- name: "Cron | Mask unnecessary systemd timers (16.4)"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+    state: stopped
+  become: true
+  loop: "{{ cron_disable_timers }}"
+  failed_when: false

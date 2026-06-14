@@ -73,6 +73,36 @@
   become: true
   when: castellan_mode | default('apply') != 'audit'
 
+# --- 18.5 - alert on security events (SSH logins), apply mode only -----------
+- name: "Compliance | Security-event alerting (18.5)"
+  when:
+    - compliance_alerting | bool
+    - castellan_mode | default('apply') != 'audit'
+  block:
+    - name: "Compliance | Deploy the notification script (18.5)"
+      ansible.builtin.template:
+        src: castellan-notify.sh.j2
+        dest: /usr/local/sbin/castellan-notify
+        owner: root
+        group: root
+        mode: "0755"
+      become: true
+
+    - name: "Compliance | Back up the sshd PAM stack before the hook (18.5)"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/pam.d/sshd
+
+    - name: "Compliance | Hook the notifier into the sshd PAM session (18.5)"
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/sshd
+        line: "session optional pam_exec.so seteuid /usr/local/sbin/castellan-notify"
+        insertafter: EOF
+        state: present
+      become: true
+
 # --- 18.2 - schedule a periodic re-audit to detect drift (apply mode only) ---
 - name: "Compliance | Locate the lynis binary (18.2)"
   ansible.builtin.command: command -v lynis
