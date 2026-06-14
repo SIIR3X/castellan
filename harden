@@ -21,18 +21,27 @@ ok()   { printf '%b\n' "${C_GRN}[+]${C_RST} $*"; }
 warn() { printf '%b\n' "${C_YEL}[!]${C_RST} $*" >&2; }
 die()  { printf '%b\n' "${C_RED}[x]${C_RST} $*" >&2; exit 1; }
 
+# Interactive config library (wizard + measure selector + catalog).
+# shellcheck source=lib/castellan-config.sh
+[ -f "${REPO_ROOT}/lib/castellan-config.sh" ] && . "${REPO_ROOT}/lib/castellan-config.sh"
+
 usage() {
   cat <<'EOF'
 Castellan - agentless Linux hardening, driven by Ansible.
 
 Usage:
-  ./harden init     <host>              Create a per-host config from the template
-  ./harden audit    <target> [args...]  Read-only compliance audit (no changes)
-  ./harden apply    <target> [args...]  Apply hardening
-  ./harden rollback <target> [args...]  Restore the latest backup (or a specific
+  ./harden init      <host>             Interactive setup of a new host (wizard)
+  ./harden configure <host>             Pick profile + measures (roles -> checklist)
+  ./harden list                         List configured hosts, profile and measures
+  ./harden audit     <target> [args...] Read-only compliance audit (no changes)
+  ./harden apply     <target> [args...] Apply hardening
+  ./harden rollback  <target> [args...] Restore the latest backup (or a specific
                                         run via -e castellan_rollback_stamp=<dir>)
-  ./harden report   <target>            Show the latest report per host
+  ./harden report    <target>           Show the latest report per host
   ./harden help                         Show this help
+
+A host appears in the inventory automatically once ./harden init creates its
+config; no static inventory file needs editing.
 
 <target> is any Ansible host pattern - a single host, a comma-separated list,
 an inventory group, or 'all'. init always takes a single host. Examples:
@@ -121,20 +130,21 @@ run_rollback() {
 }
 
 cmd_init() {
-  local host="$1" dest="${HOST_VARS_DIR}/$1.yml"
+  local host="$1"
   case "$host" in
     *,*|all) die "init takes a single host, not a list or group ('${host}')." ;;
   esac
-  [ -f "$EXAMPLE_VARS" ] || die "Template not found: $EXAMPLE_VARS"
-  [ -f "$dest" ] && die "Config already exists: $dest (edit it, or remove it first)."
-  mkdir -p "$HOST_VARS_DIR"
-  sed "s|^target_ip:.*|target_ip:        ${host}|" "$EXAMPLE_VARS" > "$dest"
-  ok "Created ${dest}"
-  info "Next steps:"
-  info "  1. Edit ${dest} (admin_user, connection_mode, ssh_port, ...)."
-  info "  2. Add '${host}' under the 'vps' group in inventory/hosts.yml."
-  info "  3. Run:  ./harden audit ${host}"
-  warn "The full interactive wizard arrives in a later phase (see docs/config.md)."
+  command -v cc_wizard >/dev/null 2>&1 || die "lib/castellan-config.sh is missing."
+  cc_wizard "$host"
+}
+
+cmd_configure() {
+  local host="$1"
+  case "$host" in
+    *,*|all) die "configure takes a single host ('${host}')." ;;
+  esac
+  command -v cc_configure >/dev/null 2>&1 || die "lib/castellan-config.sh is missing."
+  cc_configure "$host"
 }
 
 cmd_report() {
@@ -159,6 +169,10 @@ main() {
   case "$subcmd" in
     init)
       require_host "${2:-}"; cmd_init "$2" ;;
+    configure|config)
+      require_host "${2:-}"; cmd_configure "$2" ;;
+    list|ls)
+      cc_list ;;
     audit)
       require_ansible; require_host "${2:-}"
       local host="$2"; shift 2
