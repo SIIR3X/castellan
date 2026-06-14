@@ -81,8 +81,9 @@
       when: enable_integrity | default(false)
       tags: [integrity]
 
-    # TODO next: low-risk roles
-    #   - boot
+    - role: boot          # GRUB perms + opt-in cmdline/password (opt-in role)
+      when: enable_boot | default(false)
+      tags: [boot]
 
   post_tasks:
     # Flush handlers explicitly so sshd is reloaded ONCE, after every role's
