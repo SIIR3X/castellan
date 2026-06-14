@@ -1,0 +1,6 @@
+---
+# mfa edits the sshd PAM stack (/etc/pam.d/sshd) and adds an sshd drop-in for
+# AuthenticationMethods; it relies on the ssh role for the single end-of-play
+# sshd reload and for KbdInteractiveAuthentication (flipped on when enable_mfa is
+# true). Both edited files are backed up via backup_config inside apply.yml.
+dependencies: []

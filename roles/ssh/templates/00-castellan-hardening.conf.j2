@@ -15,8 +15,11 @@ PasswordAuthentication {{ ssh_password_auth }}
 PermitRootLogin {{ ssh_permit_root }}
 PermitEmptyPasswords no
 
-# 2.4 - no keyboard-interactive / challenge-response.
-KbdInteractiveAuthentication no
+# 2.4 - no keyboard-interactive / challenge-response. The mfa role (section 3)
+# flips this on when enable_mfa is true so TOTP can run over keyboard-interactive;
+# it is then made safe by AuthenticationMethods publickey,keyboard-interactive
+# (set by the mfa drop-in) so a code alone can never replace the key.
+KbdInteractiveAuthentication {{ 'yes' if (enable_mfa | default(false)) else 'no' }}
 
 # 2.5 - restrict access to specific groups.
 AllowGroups {{ ssh_allow_groups | join(' ') }}

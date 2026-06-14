@@ -1,0 +1,46 @@
+---
+# mfa (audit) - read-only checks for section 3.
+
+- name: "Mfa | Check libpam-google-authenticator (3.1)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' libpam-google-authenticator
+  register: _mfa_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Mfa | Read the sshd PAM stack (3.1)"
+  ansible.builtin.slurp:
+    src: /etc/pam.d/sshd
+  register: _mfa_pam
+  become: true
+
+- name: "Mfa | Query effective sshd auth settings (3.4)"
+  ansible.builtin.command: sshd -T
+  register: _mfa_sshd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Mfa | Report section 3 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _mfa_report | from_yaml }}
+  vars:
+    _pam_txt: "{{ _mfa_pam.content | b64decode }}"
+    _sshd_lines: "{{ _mfa_sshd.stdout_lines | default([]) | map('lower') | list }}"
+    _has_ga: "{{ 'pam_google_authenticator' in _pam_txt }}"
+    _ca_off: "{{ _pam_txt is not search('(?m)^@include common-auth') }}"
+    _am: "{{ _sshd_lines | select('match', 'authenticationmethods ') | list }}"
+    _kbd: "{{ _sshd_lines | select('match', 'kbdinteractiveauthentication ') | list }}"
+    _am_ok: "{{ _am | select('search', 'publickey,keyboard-interactive') | list | length > 0 }}"
+    _kbd_ok: "{{ _kbd | select('search', 'yes') | list | length > 0 }}"
+    _pkg_ok: "{{ 'install ok installed' in (_mfa_pkg.stdout | default('')) }}"
+    _mfa_report: |
+      - "3.1 libpam-google-authenticator: {{ 'ok' if _pkg_ok else 'FAIL (not installed)' }}"
+      - "3.1 pam_google_authenticator in sshd PAM: {{ 'ok' if _has_ga else 'FAIL' }}"
+      - "3.1 common-auth disabled for sshd: {{ 'ok' if _ca_off else 'FAIL (password still in PAM)' }}"
+      - "3.4 AuthenticationMethods key+TOTP: {{ 'ok' if _am_ok else 'FAIL' }}"
+      - "2.4 KbdInteractiveAuthentication on: {{ 'ok' if _kbd_ok else 'FAIL' }}"
+      - "3.2 FIDO2/U2F: client-side (sk-ed25519); not enforced server-side"
+      - "3.3 private-key passphrase: client-side policy; not verifiable remotely"
