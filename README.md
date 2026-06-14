@@ -1,14 +1,16 @@
 # Castellan
 
 <p align="center">
-  <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/ansible-core%202.16%2B-1f3b4d.svg" alt="Ansible core 2.16+">
-  <img src="https://img.shields.io/badge/targets-Ubuntu%20%7C%20Debian-e2761b.svg" alt="Ubuntu / Debian">
-  <img src="https://img.shields.io/badge/agentless-yes-2ea44f.svg" alt="Agentless">
+  <img src="docs/assets/castellan-banner.svg" alt="Castellan" width="780">
 </p>
 
 <p align="center">
-  <img src="docs/assets/castellan-banner.svg" alt="Castellan" width="780">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version 0.1.0">
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/platform-Linux-1793d1.svg" alt="Platform: Linux">
+  <img src="https://img.shields.io/badge/ansible-core%202.16%2B-1f3b4d.svg" alt="Ansible core 2.16+">
+  <img src="https://img.shields.io/badge/targets-Ubuntu%20%7C%20Debian-e2761b.svg" alt="Targets: Ubuntu / Debian">
+  <img src="https://img.shields.io/badge/agentless-yes-2ea44f.svg" alt="Agentless">
 </p>
 
 **Agentless security hardening for Ubuntu and Debian servers, driven by Ansible
