@@ -35,6 +35,10 @@
       when: enable_ssh | default(true)
       tags: [ssh]
 
+    - role: mfa           # TOTP 2FA on SSH (opt-in; key+code, admin exempted)
+      when: enable_mfa | default(false)
+      tags: [mfa]
+
     - role: accounts      # account lockdown (lock root LAST, post-verify)
       when: enable_accounts | default(true)
       vars:
