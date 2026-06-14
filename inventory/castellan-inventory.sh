@@ -9,7 +9,9 @@
 # host_vars/ and group_vars/ directories.
 set -euo pipefail
 
-HV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/host_vars"
+# Installed mode points here at the per-user host_vars dir; source mode falls
+# back to the host_vars/ next to this script.
+HV="${CASTELLAN_HOST_VARS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/host_vars}"
 
 emit_list() {
   local out="" first=1 f b

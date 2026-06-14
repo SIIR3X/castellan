@@ -9,7 +9,11 @@
 
 - name: "Compliance | Compute the local report path"
   ansible.builtin.set_fact:
-    compliance_local_path: "{{ playbook_dir }}/../{{ compliance_report_dir }}/{{ inventory_hostname }}_{{ compliance_stamp }}"
+    compliance_local_path: "{{ _base ~ '/' ~ inventory_hostname ~ '_' ~ compliance_stamp }}"
+  vars:
+    # Absolute report dir (installed mode) is used as-is; a relative one stays
+    # anchored at the repo root, next to the playbooks.
+    _base: "{{ compliance_report_dir if compliance_report_dir.startswith('/') else playbook_dir ~ '/../' ~ compliance_report_dir }}"
 
 - name: "Compliance | Ensure Lynis is installed"
   ansible.builtin.apt:

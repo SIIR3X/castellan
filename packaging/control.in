@@ -1,0 +1,17 @@
+Package: castellan
+Version: @VERSION@
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3, openssh-client, ansible-core | ansible
+Recommends: whiptail
+Maintainer: Lucas Fagioli <lucas.fagioli576@gmail.com>
+Homepage: https://github.com/SIIR3X/castellan
+Description: Agentless hardening of Ubuntu and Debian servers
+ Castellan applies CIS/ANSSI-style security hardening to Ubuntu and Debian
+ servers over SSH, driven by Ansible from your own machine. It runs a read-only
+ audit and an idempotent apply with strict anti-lockout ordering, selectable
+ hardening profiles (minimal/standard/paranoid) and an interactive setup.
+ .
+ Nothing is installed on the target: only SSH and the pre-existing Python 3 are
+ used. Ansible core 2.16 or newer is recommended on the control machine.
