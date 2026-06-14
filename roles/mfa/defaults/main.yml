@@ -26,8 +26,12 @@
 mfa_pam_nullok: true
 
 # --- 3.4 Force key + 2FA (AuthenticationMethods) -----------------------------
-# Users kept on public-key-only auth (no 2nd factor). The admin / automation
-# account MUST stay here or Ansible (and any break-glass key login) locks itself
-# out, since its key login is non-interactive and cannot type a TOTP code.
-mfa_exempt_users:
-  - "{{ admin_user | default('root') }}"
+# Users kept on public-key-only auth (no 2nd factor). Both Castellan automation
+# accounts MUST stay exempt or Ansible locks itself out (it connects with
+# BatchMode, so it cannot type a TOTP code over keyboard-interactive): the
+# admin_user runs the verify/harden/report plays, and the initial_user runs the
+# bootstrap play on re-runs. Override mfa_exempt_users to add real human admins.
+mfa_exempt_users: >-
+  {{ ([admin_user | default('root')]
+      + ([initial_user] if (initial_user is defined and initial_user | default('')) else []))
+     | unique }}
