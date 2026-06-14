@@ -279,7 +279,7 @@ cc_wizard() {
   mkdir -p "$HOST_VARS_DIR"
   info "Interactive setup for '${host}' (Enter accepts the default)."
 
-  local ip cmode iuser iport ikey admin pubkey sudo sport groups ports ban prof reboot email
+  local ip cmode iuser iport ikey admin pubkey sudo sport ports ban prof email
   ip="$(cc_input "Target IP or FQDN:" "$host")"
   cmode="$(cc_menu "Initial connection method" root_password "root + password" root_key "root + private key" user_sudo "existing user + sudo")"
   [ -n "$cmode" ] || cmode=root_password
@@ -288,9 +288,9 @@ cc_wizard() {
     *)         iuser="root" ;;
   esac
   iport="$(cc_input "Initial SSH port:" "22")"
-  [ "$cmode" = root_key ] && ikey="$(cc_input "Private key path for first contact:" "~/.ssh/id_ed25519")"
+  [ "$cmode" = root_key ] && ikey="$(cc_input "Private key path for first contact:" "${HOME}/.ssh/id_ed25519")"
   admin="$(cc_input "Admin user to create:" "castellan")"
-  pubkey="$(cc_input "Public key to deploy (path):" "~/.ssh/id_ed25519.pub")"
+  pubkey="$(cc_input "Public key to deploy (path):" "${HOME}/.ssh/id_ed25519.pub")"
   sudo="$(cc_menu "Sudo for the admin" nopasswd "nopasswd (key only, automation)" password "password (2nd factor)")"
   [ -n "$sudo" ] || sudo=nopasswd
   sport="$(cc_input "Hardened SSH port (open in ufw first!):" "22")"

@@ -48,6 +48,54 @@ Re-running `./test/up.sh` resets the target to a clean state in ~1s.
   key. Testing the `root_password` path additionally needs `sshpass`
   (`sudo apt-get install -y sshpass`).
 
+## Full end-to-end cycle (`make test`)
+
+`test/e2e.sh` runs the whole pipeline against the Hyper-V VM and asserts every
+step; `make test` is the shortcut. It reverts the `clean-baseline` checkpoint
+before step 1 and after step 7, so the run starts and ends on a pristine target.
+
+| Step | Assertion |
+|------|-----------|
+| 1. cold audit        | degrades gracefully (`failed=0`) |
+| 2. apply             | `failed=0`, no lockout (Play 4 reached) |
+| 3. post-apply audit  | 0 `FAIL` in the dashboard |
+| 4. re-apply          | idempotent (`changed=0`) |
+| 5. `check.sh`        | all green |
+| 6. fresh admin login | new SSH session: login + sudo OK |
+| 7. rollback          | restores without lockout |
+
+```
+make test                 # full cycle, reset before and after
+SKIP_RESET=1 make test    # assume the VM is already clean (no checkpoint revert)
+KEEP_VM=1   make test     # reset before, but leave the VM as-is at the end
+```
+
+### Config: `test/vm.env`
+
+All the target settings (IP, ports, admin / initial user, reset timeout,
+scheduled-task name, VM name + checkpoint) live in one editable file,
+[`test/vm.env`](vm.env). The shell scripts source it and the setup `.ps1` reads
+it, so you change a value in a single place. Anything exported in the
+environment still overrides it ad-hoc (`CASTELLAN_HOST=10.0.0.5 make test`).
+It holds no secrets; the SSH key stays in `test/secrets/`.
+
+### One-time setup: unattended VM reset
+
+Hyper-V cmdlets need an elevated PowerShell, which WSL is not. So the reset is
+done by a pre-authorized Windows scheduled task that WSL triggers without a UAC
+prompt. Set `CASTELLAN_VM_NAME` in `test/vm.env`, then register the task
+**once**, from an **elevated** PowerShell at the repo root:
+
+```
+powershell -ExecutionPolicy Bypass -File test\vm-reset-setup.ps1
+```
+
+(or pass `-VMName '<your-vm-name>'` to override `vm.env`; `Get-VM` lists the
+names, the checkpoint defaults to `clean-baseline`.) After
+that, `test/vm-reset.sh` (and `make test`) revert the VM unattended via
+`schtasks.exe /run /tn CastellanVMReset`. Without the task, the reset steps fail
+with a reminder; use `SKIP_RESET=1` to run the cycle on an already-clean VM.
+
 ## systemd target (for ufw / fail2ban, later)
 
 The plain sshd container cannot run services. When the MVP firewall lands, use

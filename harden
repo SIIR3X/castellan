@@ -25,7 +25,6 @@ else
 fi
 REPO_ROOT="$PROG_DIR"   # back-compat for any internal reference
 PLAYBOOK="${PROG_DIR}/playbooks/site.yml"
-EXAMPLE_VARS="${PROG_DIR}/inventory/host_vars.example.yml"
 
 # Scaffold the per-user data directory on first use (installed mode only).
 ensure_data_dir() {
