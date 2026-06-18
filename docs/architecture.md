@@ -1,300 +1,257 @@
-# Architecture - VPS Hardening Tool (Ansible)
+# Architecture
 
-> Design document. Describes the project structure, the breakdown into roles, the anti-lockout
-> execution flow, and the usage experience. No code here: this is the plan that will guide
-> implementation. Functional reference: [security-measures.md](./security-measures.md).
+How Castellan is built: the project layout, the split into roles, the
+anti-lockout execution flow, the audit/apply duality and the two install layouts.
 
----
+Companion documents: [install.md](./install.md) (set up the control machine),
+[config.md](./config.md) (what the user provides),
+[security-measures.md](./security-measures.md) (the hardening catalogue).
 
 ## 1. Guiding principles
 
 | Principle | Architectural consequence |
 |-----------|---------------------------|
-| Agentless | Nothing installed on the VPS. Everything goes through SSH from the control machine. Only Python (already present) is required on the target. |
-| Two separate phases | audit (read-only, --check) then apply (modifies). Never an apply without a prior audit being possible. |
-| Anti-lockout | Strict execution order; reconnection check before cutting access. |
-| Idempotence | Re-running the playbook 1 or 50 times = same result, safely. |
-| Reversibility | Timestamped backup of every modified file + a rollback procedure. |
-| Modularity | 1 security category = 1 role = independently enable/disable. |
-| Variable connection | Supports root+password, root+key, or user+sudo depending on the host. |
+| Agentless | Nothing is installed on the target. Everything runs over SSH from the control machine, using the Python 3 already present on the host. |
+| Audit before apply | Two modes from one codebase: audit (read-only, `--check`) reports deviations; apply remediates. An audit is always possible first. |
+| Anti-lockout | A strict play and role order, plus a reconnection check, guarantee access is never cut before the new access is proven. |
+| Idempotence | Running the playbook once or fifty times yields the same state, safely. |
+| Reversibility | Every modified file is backed up with a timestamp, and a rollback command restores it. |
+| Modularity | One security category equals one role, enabled or disabled independently or through a profile. |
+| Variable connection | The first contact supports root + password, root + key, or an existing sudo user, per host. |
 
----
-
-## 2. Project tree
+## 2. Project layout
 
 ```
-vps-hardening/
-  harden                          # CLI wrapper (script): ./harden audit|apply|rollback <host>
-  ansible.cfg                     # Ansible config (SSH, pipelining, retry, callback)
-  README.md
+castellan/
+  harden                       CLI wrapper: init/audit/apply/rollback/report
+  ansible.cfg                  Ansible config (accept-new host keys, pipelining, yaml callback)
+  Makefile                     Quality gate (make check) and live cycle (make test)
 
   inventory/
-    hosts.yml                     # VPS list (groups, IPs)
-    host_vars/
-      <ip>.yml                    # Per-VPS parameters (port, user)
-
-  group_vars/
-    all.yml                       # Global config (default hardening values)
-    vault.yml                     # Encrypted secrets (Ansible Vault): initial passwords
+    hosts.yml                  Static "vps" group (optional; init uses a dynamic inventory)
+    castellan-inventory.sh     Dynamic inventory: lists hosts that have a config file
+    group_vars/all.yml         Global defaults, profiles and enable_<role> toggles
+    host_vars.example.yml      Per-host template copied by "harden init"
+    host_vars/<host>.yml       Per-host config (plaintext, no secrets)
 
   playbooks/
-    site.yml                      # Master playbook (orchestrates the plays)
-    00-bootstrap.yml              # Play 1: initial connection, create admin + key
-    01-verify-access.yml          # Play 2: test reconnection via the new access (safety net)
-    10-harden.yml                 # Play 3: apply all hardening roles
-    99-report.yml                 # Play 4: Lynis audit + final report
+    site.yml                   Imports the four plays in anti-lockout order
+    00-bootstrap.yml           Play 1: create the admin user and deploy its key
+    01-verify-access.yml       Play 2: reconnect as the admin, assert sudo
+    10-harden.yml              Play 3: apply the roles in lockout-safe order
+    99-report.yml              Play 4: Lynis scan and fetch the report
+    50-rollback.yml            Standalone: restore files from a backup run
 
-  roles/
-    accounts/                     # Sec 1  Accounts & sudo
-    ssh/                          # Sec 2  sshd hardening
-    mfa/                          # Sec 3  TOTP 2FA (optional)
-    firewall/                     # Sec 4  ufw
-    fail2ban/                     # Sec 5  Anti-bruteforce
-    updates/                      # Sec 6  unattended-upgrades
-    sysctl/                       # Sec 7  Kernel hardening
-    confinement/                  # Sec 8  AppArmor + systemd sandboxing
-    filesystem/                   # Sec 9  Mounts, SUID, permissions
-    services/                     # Sec 10 Service/package minimization
-    audit_logging/                # Sec 11 auditd + journald
-    integrity/                    # Sec 12 AIDE / rkhunter
-    pam/                          # Sec 13 Password policy
-    network/                      # Sec 14 NTP, protocols, DNS
-    boot/                         # Sec 15 GRUB
-    cron/                         # Sec 16 Scheduled-task restrictions
-    backup_config/                # Sec 17 Pre-change backup (cross-cutting)
-    compliance/                   # Sec 18 Lynis + reporting
-
-  reports/                        # Generated reports (audit/diff/Lynis), timestamped
-    <ip>_<date>/
-
-  files/
-    public_keys/                  # Public keys to deploy
+  roles/                       One role per category (see section 7)
+  lib/castellan-config.sh      Interactive wizard, measure selector and catalogue
+  files/public_keys/           Public keys to deploy
+  reports/                     Generated reports (timestamped per host)
+  packaging/                   .deb build and signed apt repository scripts
+  test/                        Disposable test targets and the end-to-end cycle
+  docs/                        This documentation
 ```
 
-### Anatomy of a role (common template)
+Anatomy of a role (identical across every role, which is what makes the set
+consistent and maintainable):
 
 ```
-roles/ssh/
-  defaults/main.yml      # Default variables (port, options, target values)
-  tasks/
-    main.yml             # Dispatches to audit.yml or apply.yml
-    audit.yml            # Read-only checks -> collect deviations
-    apply.yml            # Remediation (with prior backup)
-  handlers/main.yml      # e.g. "reload sshd" (triggered at end of play)
-  templates/
-    sshd_hardening.conf.j2
-  meta/main.yml          # Possible dependencies (e.g. backup_config)
+roles/<name>/
+  defaults/main.yml      Target values and options
+  tasks/main.yml         Dispatch on castellan_mode -> audit.yml or apply.yml
+  tasks/audit.yml        Read-only checks; report deviations
+  tasks/apply.yml        Remediation; call backup_config first, then change
+  handlers/main.yml      For example reload sshd, flushed at the end of the play
+  templates/*.j2         Config files rendered onto the target
+  meta/main.yml          Dependencies (usually none)
 ```
-
-This template is identical across the 18 roles: this is what makes the whole set consistent and maintainable.
-
----
 
 ## 3. Execution flow (anti-lockout orchestration)
 
-site.yml chains 4 plays. The sequencing is the heart of the safety design.
+`site.yml` chains four plays. The sequencing is the heart of the safety design.
 
 ```
-+-----------------------------------------------------------------+
-|  PLAY 1 - BOOTSTRAP      (connection: INITIAL credentials)       |
-|  roles: accounts, backup_config                                 |
-|   - Updates the apt cache                                       |
-|   - Creates the admin user + sudo group                         |
-|   - Deploys the SSH public key                                  |
-|   - Configures sudo                                             |
-|   - DOES NOT TOUCH sshd YET                                     |
-+-----------------------------------------------------------------+
-                              |
-                              v
-+-----------------------------------------------------------------+
-|  PLAY 2 - VERIFY ACCESS  (connection: NEW admin + key)           |
-|   - Attempts a real connection with the new user                |
-|   - Verifies that sudo works                                    |
-|   - FAILURE HERE  ->  STOP, root access still intact (no lock)  |
-|   - SUCCESS       ->  green light to harden                     |
-+-----------------------------------------------------------------+
-                              |
-                              v
-+-----------------------------------------------------------------+
-|  PLAY 3 - HARDEN         (connection: NEW admin + sudo)          |
-|  IMPERATIVE order of roles:                                     |
-|   1. firewall   -> open the SSH port BEFORE enabling ufw        |
-|   2. fail2ban   -> ignoreip = your IP (no self-ban)             |
-|   3. ssh        -> disable root/password, change port           |
-|      ("reload sshd" handler deferred to end of play)            |
-|   4. sysctl, pam, confinement, filesystem, services,           |
-|      audit_logging, integrity, network, cron, boot, updates     |
-|   5. FLUSH handlers -> reload sshd ONCE, at the very end        |
-+-----------------------------------------------------------------+
-                              |
-                              v
-+-----------------------------------------------------------------+
-|  PLAY 4 - REPORT                                                |
-|   - Runs Lynis, retrieves the hardening index                   |
-|   - Generates the report (before/after, diff, remaining gaps)   |
-|   - Fetches it into reports/<ip>_<date>/                        |
-+-----------------------------------------------------------------+
+Play 1  BOOTSTRAP        connection: INITIAL credentials
+  - Back up the files that later plays will modify (backup_config)
+  - Create the admin user, its group and sudoers drop-in
+  - Deploy the admin SSH public key
+  - Does NOT touch sshd yet
+
+Play 2  VERIFY ACCESS    connection: NEW admin + key
+  - Reconnect as the new admin and assert sudo works
+  - Failure: stop here, root access is still intact (no lockout)
+  - In audit mode the host ends gracefully instead of aborting
+
+Play 3  HARDEN           connection: NEW admin + sudo
+  - firewall   open the SSH port BEFORE enabling ufw
+  - fail2ban   ignoreip set so you cannot self-ban
+  - ssh        no root, no password, modern crypto, port via ssh.socket
+  - then sysctl, pam, audit_logging, services, network, filesystem, cron,
+    updates, and the opt-in roles (confinement, integrity, boot, mfa)
+  - flush handlers: reload sshd ONCE, at the very end
+
+Play 4  REPORT
+  - Run Lynis, read the hardening index, render the report
+  - Fetch it into reports/<host>_<timestamp>/
 ```
 
-### Why this order
+Why this order:
 
-- Firewall before SSH: the new port must be open before sshd enables it, otherwise lockout.
-- Fail2ban before SSH: ignoreip configured before any ban can reach you.
-- SSH (reload) last: via a handler triggered by "meta: flush_handlers" at the very end, never in the middle.
-- Play 2 = safety net: if the new connection does not work, we stop before breaking anything.
+- Firewall before SSH: the new port must be open before sshd starts using it.
+- Fail2ban before SSH: `ignoreip` is in place before any ban could reach you.
+- SSH reload last: triggered by a handler flushed at the very end, never mid-run.
+- Play 2 is the safety net: if the new access does not work, nothing destructive
+  has happened yet, so root and password access remain usable.
 
----
+## 4. Audit versus apply
 
-## 4. AUDIT vs APPLY mode
-
-A single codebase, two behaviors, driven by a "mode" variable.
+One codebase, two behaviours, driven by the `castellan_mode` variable that the
+wrapper sets.
 
 | Aspect | audit | apply |
 |--------|-------|-------|
-| Invocation | ./harden audit <host> | ./harden apply <host> |
-| Under the hood | ansible-playbook ... --check --diff + mode=audit | real execution, mode=apply |
-| Effect on the VPS | None (read-only) | Modifies the config |
-| Output | List of deviations per measure (compliant / non-compliant) | List of applied changes + diff |
-| Roles executed | each role's tasks/audit.yml | tasks/apply.yml (backup -> modify) |
+| Command | `castellan audit <host>` | `castellan apply <host>` |
+| Under the hood | `ansible-playbook ... --check --diff`, `castellan_mode=audit` | real run, `castellan_mode=apply` |
+| Effect on the host | None (read-only) | Modifies the configuration |
+| Output | Per-measure deviations (ok / FAIL) | Applied changes and a diff |
+| Role path | each role's `tasks/audit.yml` | `tasks/apply.yml` (backup, then change) |
 
-Each role therefore exposes two paths (audit.yml / apply.yml) selected by mode.
-Audit mode feeds a compliance report mapped to the security-measures.md identifiers
-(e.g. "2.1 ok", "7.9 fail expected=2 found=0").
+Audit messages map to the identifiers in
+[security-measures.md](./security-measures.md), for example `2.1 ok` or
+`1.6 FAIL: <accounts>`. A run reports zero FAIL on a fully hardened host.
 
----
+## 5. Centralized configuration
 
-## 5. Centralized configuration (group_vars/all.yml)
+Global defaults, the profile definitions and the per-role toggles live in
+`inventory/group_vars/all.yml`. Per-host files in `inventory/host_vars/<host>.yml`
+override them, and any value can be overridden for a single run with `-e`.
 
-All customization happens here, without touching the role code. Expected shape:
+| Block | Key variables |
+|-------|---------------|
+| Run mode | `castellan_mode` (set by the wrapper) |
+| Profile | `hardening_profile`: minimal / standard / paranoid |
+| Toggles | `enable_<role>` for each role, derived from the active profile |
+| Access | `sudo_mode` |
+| SSH | `ssh_port`, `ssh_allow_groups`, `ssh_permit_root`, `ssh_password_auth` |
+| Firewall | `ufw_default_incoming`, `ufw_allowed_ports`, `ufw_rate_limit_ssh` |
+| Fail2ban | `f2b_maxretry`, `f2b_bantime`, `f2b_findtime`, `f2b_ignoreip` |
+| Updates | `auto_reboot`, `auto_reboot_time` |
+| Backups | `castellan_backup_dir` |
 
-| Block | Key variables (examples) |
-|-------|--------------------------|
-| Access | admin_user, admin_pubkey_file, sudo_nopasswd |
-| SSH | ssh_port, ssh_permit_root, ssh_password_auth, ssh_allow_groups |
-| Firewall | ufw_default_incoming, ufw_allowed_ports[], ufw_rate_limit_ssh |
-| Fail2ban | f2b_maxretry, f2b_bantime, f2b_ignoreip[] |
-| Updates | auto_reboot, auto_reboot_time |
-| Module toggles | enable_<role>: true/false for each role |
-| Profile | hardening_profile: minimal / standard / paranoid |
+Profiles select which roles run. The exact membership is defined in
+`group_vars/all.yml`:
 
-### Predefined profiles
+| Profile | Roles run |
+|---------|-----------|
+| minimal | accounts, ssh, firewall, fail2ban, updates, compliance |
+| standard | minimal plus sysctl, pam, audit_logging, services, network, filesystem, cron (the default) |
+| paranoid | standard plus confinement, integrity, boot |
 
-To avoid configuring everything by hand, 3 profiles determine which measures
-(by priority CRIT/IMP/REC/OPT) are enabled:
+`mfa` belongs to no profile because it needs TOTP enrollment; enable it explicitly
+with `-e enable_mfa=true` or through the selector. An unknown profile name falls
+back to standard.
 
-| Profile | Includes | Usage |
-|---------|----------|-------|
-| minimal | essential CRIT + IMP | Quick hardening, low risk of breakage |
-| standard | CRIT IMP REC | Recommended default. Good balance. |
-| paranoid | everything, including OPT | Sensitive servers, after validating usage |
+## 6. Connection per host
 
----
+The first contact (Play 1) is parameterized per host in
+`inventory/host_vars/<host>.yml`. Plays 2 to 4 always use the new admin user, its
+key and the new port.
 
-## 6. Handling variable connection per host
+| Case | Variables | Typical host |
+|------|-----------|--------------|
+| root + password | `connection_mode: root_password`, `initial_user: root`, `--ask-pass` | OVH, Contabo, classic Hetzner |
+| root + key | `connection_mode: root_key`, `initial_user: root`, `initial_key` | DigitalOcean, Hetzner Cloud |
+| user + sudo | `connection_mode: user_sudo`, `initial_user: <user>`, become | hosts with a pre-created user |
 
-Answer to the "it varies by host" case. The initial connection (Play 1) is
-parameterized per VPS in host_vars/<ip>.yml:
+## 7. Roles and their references
 
-| Host case | Variables | Detail |
-|-----------|-----------|--------|
-| root + password | initial_user: root + --ask-pass (or vault) | OVH, Contabo, classic Hetzner |
-| root + key | initial_user: root, key already in place | DigitalOcean, Hetzner Cloud |
-| user + sudo | initial_user: <user>, become: true | Hosts with a pre-created user |
+Every role pairs an audit path with an apply path and maps to a section of
+[security-measures.md](./security-measures.md). `backup_config` is cross-cutting:
+it runs in bootstrap and powers rollback.
 
-Plays 2 to 4 always use the new admin_user + key + (new) port.
-The harden wrapper detects/asks for the connection mode on first contact.
+| Role | Section | Lockout risk | Profile |
+|------|---------|--------------|---------|
+| backup_config | 17 (cross-cutting) | - | always |
+| accounts | 1 | medium | minimal |
+| ssh | 2 | high | minimal |
+| firewall | 4 | high | minimal |
+| fail2ban | 5 | medium | minimal |
+| updates | 6 | - | minimal |
+| compliance | 18 | - | minimal |
+| sysctl | 7 | low | standard |
+| pam | 13 | medium | standard |
+| audit_logging | 11 | - | standard |
+| services | 10 | medium | standard |
+| network | 14 | low | standard |
+| filesystem | 9 | low | standard |
+| cron | 16 | - | standard |
+| confinement | 8 | low | paranoid |
+| integrity | 12 | - | paranoid |
+| boot | 15 | low | paranoid |
+| mfa | 3 | medium | opt-in only |
 
----
-
-## 7. Backup & rollback strategy
+## 8. Backup and rollback
 
 | Element | Mechanism |
 |---------|-----------|
-| File backup | Before each modification, a timestamped copy (*.bak.<timestamp>) on the VPS + an option to fetch locally |
-| Cross-cutting role | backup_config (as a meta dependency of roles that modify files) |
-| Rollback | ./harden rollback <host> restores the most recent .bak files and reloads services |
-| Extra safety net | Recommendation: VPS snapshot on the host side before apply |
+| File backup | Before any change, `backup_config` copies the file under `castellan_backup_dir` with a per-run timestamp and records a MANIFEST. |
+| Rollback | `castellan rollback <host>` runs `50-rollback.yml`, which restores or removes files from the latest backup run (or a specific run via `-e castellan_rollback_stamp=<dir>`). |
+| Extra safety net | A host-side VPS snapshot before the first apply is recommended where the provider allows it. |
 
-> Note: an SSH/firewall rollback remains delicate (reverse lockout risk). The wrapper
-> always keeps a backup session and only acts after confirming reconnection.
+An SSH or firewall rollback is inherently delicate (reverse lockout risk), so the
+rollback restores the backed-up files and lets the next connection use them rather
+than guessing at live service state.
 
----
+## 9. Selective execution
 
-## 8. Selective execution (tags)
-
-Each role is tagged (ssh, firewall, sysctl) to allow:
+The bootstrap and verify spine is tagged `always`, so it runs no matter what.
+Other roles are tagged by name, which lets you target a subset safely.
 
 ```
-./harden apply <host> --only ssh,firewall      # apply only these modules
-./harden audit <host> --skip boot,integrity    # audit excluding some modules
+castellan apply <host> --only ssh,firewall      apply only these roles
+castellan audit <host> --only sysctl            audit a single role
 ```
 
-Under the hood: Ansible's --tags / --skip-tags.
+`--only` is the friendly alias the wrapper translates to Ansible `--tags`. Any
+other argument after the target passes straight through to `ansible-playbook`.
 
----
+## 10. The harden wrapper
 
-## 9. User experience (the harden wrapper)
-
-A thin layer over ansible-playbook to make usage trivial:
+A thin layer over `ansible-playbook` that keeps day-to-day use trivial.
 
 | Command | Action |
 |---------|--------|
-| ./harden init <ip> | Adds the VPS to the inventory, asks for the connection mode |
-| ./harden audit <ip> | Read-only audit -> compliance report |
-| ./harden apply <ip> | Full hardening (with safety nets) |
-| ./harden rollback <ip> | Restores the latest backup |
-| ./harden report <ip> | Displays/re-reads the latest report |
-| ./harden apply <ip> --profile paranoid | Profile choice |
+| `init <host>` | Interactive wizard; writes the host config |
+| `configure <host>` | Pick the profile and tick individual measures |
+| `list` | Configured hosts, their profile and measures |
+| `audit <host>` | Read-only audit, reports deviations |
+| `apply <host>` | Full hardening with the anti-lockout spine |
+| `rollback <host>` | Restore the latest backup |
+| `report <host>` | Show the latest report path per host |
 
-End goal: a new VPS = ./harden init <ip> then ./harden apply <ip>.
+A new server is therefore `castellan init <host>` followed by
+`castellan apply <host>`.
 
----
+## 11. Two install layouts
 
-## 10. Dependencies & prerequisites
+The same `harden` script runs from a source checkout and from the apt package,
+detecting which layout it is in.
+
+| | Source checkout | Installed via apt |
+|--|-----------------|-------------------|
+| Command | `./harden` | `castellan` (symlink) |
+| Program files | the repository | `/usr/share/castellan` (read-only) |
+| Host configs | `inventory/host_vars/` | `~/.config/castellan/host_vars/` |
+| Public keys | `files/public_keys/` | `~/.config/castellan/public_keys/` |
+| Reports | `reports/` | `~/.config/castellan/reports/` |
+
+In installed mode the per-user data directory is created on first use, and
+`group_vars` and the dynamic inventory are linked back to the read-only program
+directory.
+
+## 12. Dependencies
 
 | Side | Prerequisites |
 |------|---------------|
-| Control machine | Ansible, sshpass (if initial password auth), SSH access to the VPS |
-| Target VPS | Python 3 (present by default on Ubuntu/Debian), initial access provided by the host |
-| Ansible collections | ansible.posix, community.general (ufw, sysctl modules, etc.) |
-| Optional | devsec.hardening (reusable for ssh/os/sysctl if relying on ready-made CIS) |
-
----
-
-## 11. Architectural decisions to settle (before implementation)
-
-Open points that will shape the code:
-
-1. Custom roles vs devsec.hardening: rewrite everything (full control, educational) or
-   rely on existing CIS roles for ssh/os/sysctl (less maintenance)?
-2. MVP scope: start with accounts + ssh + firewall + fail2ban + updates,
-   then extend? (recommended)
-3. Report: audit report format (readable Markdown, machine JSON, or both)?
-4. Secrets: Ansible Vault for initial passwords, or interactive --ask-pass input?
-5. Multi-VPS: target fleet execution (several hosts in parallel) from the start?
-6. SSH rollback: how far to automate rollback of lockout-risky modules?
-
----
-
-## 12. Role to reference mapping
-
-| Role | security-measures.md section | Lockout risk | In minimal profile |
-|------|:----------------------------:|:------------:|:------------------:|
-| accounts | 1 | medium | yes |
-| ssh | 2 | high | yes |
-| mfa | 3 | medium | - |
-| firewall | 4 | high | yes |
-| fail2ban | 5 | medium | yes |
-| updates | 6 | - | yes |
-| sysctl | 7 | low | yes |
-| confinement | 8 | low | - |
-| filesystem | 9 | low | partial |
-| services | 10 | medium | partial |
-| audit_logging | 11 | - | - |
-| integrity | 12 | - | - |
-| pam | 13 | medium | partial |
-| network | 14 | low | yes |
-| boot | 15 | low | - |
-| cron | 16 | - | - |
-| backup_config | 17 (cross-cutting) | - | yes |
-| compliance | 18 | - | yes |
+| Control machine | Ansible core 2.16+, OpenSSH client, Python 3; `sshpass` only if using initial password auth; `whiptail` optional for the menus |
+| Target | Python 3 (present by default on Ubuntu/Debian); initial SSH access from the host |
+| Collections | `ansible.posix`, `community.general` (ufw, sysctl, pamd and related modules) |

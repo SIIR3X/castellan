@@ -1,0 +1,78 @@
+---
+# integrity (audit) - read-only checks mapped to section 12; no changes.
+
+- name: "Integrity | Check whether AIDE is installed (12.1)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' aide
+  register: _integrity_aide_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Integrity | Stat the AIDE database (12.2)"
+  ansible.builtin.stat:
+    path: "{{ integrity_aide_db }}"
+  register: _integrity_db_stat
+  become: true
+
+- name: "Integrity | Check the daily AIDE check timer (12.1)"
+  ansible.builtin.command: "systemctl is-enabled {{ integrity_aide_timer }}"  # noqa: command-instead-of-module
+  register: _integrity_timer
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Integrity | Check whether debsums is installed (12.5)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' debsums
+  register: _integrity_debsums_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Integrity | Count packages with modified files (12.5)"
+  ansible.builtin.shell: "set -o pipefail; debsums -s 2>/dev/null | wc -l"
+  args:
+    executable: /bin/bash
+  register: _integrity_debsums
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  when: "'install ok installed' in (_integrity_debsums_pkg.stdout | default(''))"
+
+- name: "Integrity | Check rootkit scanners and ClamAV (12.3/12.4)"
+  ansible.builtin.command: "dpkg-query -W -f='${Package} ${Status}\n' rkhunter chkrootkit clamav"
+  register: _integrity_av
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Integrity | Report section 12 compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        12.1 AIDE installed:
+        {{ 'ok' if 'install ok installed' in (_integrity_aide_pkg.stdout | default('')) else 'FAIL' }}
+      - >-
+        12.2 AIDE baseline database present:
+        {{ 'ok' if _integrity_db_stat.stat.exists else 'FAIL' }}
+      - >-
+        12.1 daily AIDE check timer enabled:
+        {{ 'ok' if (_integrity_timer.stdout | default('') | trim) == 'enabled' else 'FAIL' }}
+      - >-
+        12.5 debsums installed:
+        {{ 'ok' if 'install ok installed' in (_integrity_debsums_pkg.stdout | default('')) else 'FAIL' }}
+      - >-
+        12.5 packages with modified files (review):
+        {{ _integrity_debsums.stdout | default('n/a') | trim }}
+      - >-
+        12.3 rkhunter installed:
+        {{ ('ok' if ('rkhunter install ok installed' in (_integrity_av.stdout | default('')))
+            else 'FAIL') if integrity_rkhunter else 'off' }}
+      - >-
+        12.4 ClamAV installed:
+        {{ ('ok' if ('clamav install ok installed' in (_integrity_av.stdout | default('')))
+            else 'FAIL') if integrity_clamav else 'off' }}

@@ -1,0 +1,5 @@
+# Managed by Castellan - disable rare network protocols (14.3). Do not edit.
+{% for m in network_blacklist_protocols %}
+install {{ m }} /bin/true
+blacklist {{ m }}
+{% endfor %}

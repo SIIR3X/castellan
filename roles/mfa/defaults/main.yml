@@ -1,0 +1,37 @@
+---
+# mfa role - default values. Section 3 (strong authentication / 2FA).
+#
+# Disabled by default (enable_mfa: false) and OPT. It adds TOTP 2FA on top of
+# the SSH key. Anti-lockout is paramount because it touches SSH auth, so:
+#   - sshd requires a public key AND keyboard-interactive (TOTP), never a code
+#     alone, via AuthenticationMethods publickey,keyboard-interactive.
+#   - pam_google_authenticator is loaded with `nullok`, so a user who has NOT
+#     enrolled a token still passes the TOTP stage with their key alone (soft
+#     rollout - nobody is locked out the moment the role is enabled).
+#   - the admin / automation account is always exempted from the 2nd factor so
+#     the Ansible (and break-glass) key login never needs an interactive code.
+#   - the sshd config is validated (sshd -t) before being put in place and
+#     reloaded once, at the end of the play (shared "Ssh | Reload sshd" handler).
+#
+# Requires the ssh role (enable_ssh): it owns the single end-of-play sshd reload
+# and flips KbdInteractiveAuthentication on when enable_mfa is true.
+#
+# 3.2 (FIDO2/U2F) and 3.3 (mandatory passphrase on private keys) are client-side
+# concerns and are AUDIT-only here.
+
+# --- 3.1 TOTP 2FA on SSH -----------------------------------------------------
+# nullok: users without a configured token still pass the TOTP stage with their
+# key alone. Keep true unless every non-exempt user has enrolled; turning it off
+# while someone has no token locks that user out.
+mfa_pam_nullok: true
+
+# --- 3.4 Force key + 2FA (AuthenticationMethods) -----------------------------
+# Users kept on public-key-only auth (no 2nd factor). Both Castellan automation
+# accounts MUST stay exempt or Ansible locks itself out (it connects with
+# BatchMode, so it cannot type a TOTP code over keyboard-interactive): the
+# admin_user runs the verify/harden/report plays, and the initial_user runs the
+# bootstrap play on re-runs. Override mfa_exempt_users to add real human admins.
+mfa_exempt_users: >-
+  {{ ([admin_user | default('root')]
+      + ([initial_user] if (initial_user is defined and initial_user | default('')) else []))
+     | unique }}

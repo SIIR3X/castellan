@@ -1,0 +1,138 @@
+---
+# boot (apply) - harden GRUB (section 15). grub.cfg permissions (15.2) run
+# whenever the role is enabled; the OPT measures (kernel cmdline, GRUB password,
+# ctrl-alt-del) are each gated and off by default. update-grub is run inline
+# (not as a deferred handler) so grub.cfg is regenerated BEFORE its permissions
+# are tightened, otherwise the regeneration would reset them.
+
+- name: "Boot | Check whether update-grub is available"
+  ansible.builtin.command: which update-grub
+  register: _boot_update_grub
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# --- 15.4 Kernel security parameters (opt-in) --------------------------------
+- name: "Boot | Configure kernel security parameters (15.4)"
+  when:
+    - boot_harden_kernel_cmdline | bool
+    - boot_kernel_cmdline_params | length > 0
+  block:
+    - name: "Boot | Ensure /etc/default/grub.d exists (15.4)"
+      ansible.builtin.file:
+        path: /etc/default/grub.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: true
+
+    - name: "Boot | Back up the kernel cmdline drop-in before changes (15.4)"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/default/grub.d/99-castellan-cmdline.cfg
+
+    - name: "Boot | Write kernel cmdline drop-in (15.4)"
+      ansible.builtin.template:
+        src: grub-cmdline.cfg.j2
+        dest: /etc/default/grub.d/99-castellan-cmdline.cfg
+        owner: root
+        group: root
+        mode: "0644"
+      become: true
+      register: _boot_cmdline
+
+# --- 15.1 GRUB password (opt-in) ---------------------------------------------
+- name: "Boot | Warn when a GRUB password is requested without a hash (15.1)"
+  ansible.builtin.debug:
+    msg: >-
+      boot_set_grub_password is true but boot_grub_password_hash is empty;
+      skipping. Generate one with `grub-mkpasswd-pbkdf2`.
+  when:
+    - boot_set_grub_password | bool
+    - boot_grub_password_hash | length == 0
+
+- name: "Boot | Configure GRUB password (15.1)"
+  when:
+    - boot_set_grub_password | bool
+    - boot_grub_password_hash | length > 0
+  block:
+    - name: "Boot | Back up the GRUB password snippet before changes (15.1)"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/grub.d/41_castellan_password
+
+    - name: "Boot | Write GRUB superuser + password snippet (15.1)"
+      ansible.builtin.template:
+        src: grub-password.j2
+        dest: /etc/grub.d/41_castellan_password
+        owner: root
+        group: root
+        mode: "0755"
+      become: true
+      register: _boot_grub_pw
+
+    - name: "Boot | Back up 10_linux before marking entries unrestricted (15.1)"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/grub.d/10_linux
+
+    # Keep auto-generated menu entries bootable without a password so unattended
+    # reboots still work; only editing entries / the GRUB shell is protected.
+    - name: "Boot | Mark menu entries unrestricted (15.1)"
+      ansible.builtin.replace:
+        path: /etc/grub.d/10_linux
+        regexp: '^(CLASS="--class gnu-linux --class gnu --class os)(")'
+        replace: '\1 --unrestricted\2'
+      become: true
+      register: _boot_unrestricted
+
+# --- Regenerate grub.cfg if any GRUB input changed ---------------------------
+- name: "Boot | Regenerate grub.cfg (update-grub)"
+  ansible.builtin.command: update-grub  # noqa: command-instead-of-module
+  become: true
+  changed_when: true
+  when:
+    - "'update-grub' in (_boot_update_grub.stdout | default(''))"
+    - (_boot_cmdline.changed | default(false))
+      or (_boot_grub_pw.changed | default(false))
+      or (_boot_unrestricted.changed | default(false))
+
+# --- 15.2 Strict permissions on grub.cfg -------------------------------------
+- name: "Boot | Stat grub.cfg candidates (15.2)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _boot_grub_cfg
+  loop: "{{ boot_grub_cfg_paths }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
+
+- name: "Boot | Set strict permissions on grub.cfg (15.2)"
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    owner: root
+    group: root
+    mode: "{{ boot_grub_cfg_mode }}"
+    state: file
+  become: true
+  loop: "{{ _boot_grub_cfg.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - boot_grub_cfg_perms | bool
+    - item.stat.exists
+
+# --- 15.5 Disable Ctrl-Alt-Del reboot (opt-in) -------------------------------
+- name: "Boot | Mask ctrl-alt-del.target (15.5)"
+  ansible.builtin.systemd_service:
+    name: ctrl-alt-del.target
+    masked: true
+  become: true
+  when: boot_disable_ctrl_alt_del | bool

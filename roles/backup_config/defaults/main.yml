@@ -1,0 +1,4 @@
+---
+# The backup base directory (castellan_backup_dir) is global config and lives in
+# inventory/group_vars/all.yml. The per-run timestamp (backup_config_stamp) is
+# computed once per play in tasks/main.yml.

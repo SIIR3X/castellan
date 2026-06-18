@@ -1,0 +1,30 @@
+---
+# Play 1 - Bootstrap.
+#
+# Connects with the INITIAL credentials provided by the host, creates the
+# non-root admin user and deploys its SSH key. It does NOT touch sshd yet.
+# See docs/architecture.md (section 3).
+- name: "Castellan | Play 1 - Bootstrap (initial credentials)"
+  hosts: vps
+  gather_facts: false
+  become: true
+  vars:
+    # Connect as the host-provided account, on the initial port.
+    ansible_user: "{{ initial_user | default('root') }}"
+    ansible_port: "{{ initial_port | default(22) }}"
+
+  roles:
+    # Establish the run-wide backup timestamp/directory first.
+    # Tagged 'always' so the safety spine runs even on a targeted --tags/--only
+    # run (you must never harden a host you have not bootstrapped first).
+    - role: backup_config
+      tags: [always]
+
+    # Create the admin user, its groups, SSH key and sudoers drop-in.
+    # sshd is left untouched here; the ssh role hardens it in Play 3.
+    # Stage 'bootstrap' = creation only (lockdown happens in Play 3).
+    - role: accounts
+      when: enable_accounts | default(true)
+      vars:
+        accounts_stage: bootstrap
+      tags: [always]

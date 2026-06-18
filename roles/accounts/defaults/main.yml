@@ -1,0 +1,54 @@
+---
+# accounts role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 1 (Accounts & authentication).
+# Two stages: 'bootstrap' creates the admin (Play 1), 'harden' locks the system
+# down (Play 3, as the admin, after access is verified). 'all' does both.
+
+# Admin identity (admin_user, admin_pubkey_file, admin_shell, admin_extra_groups),
+# sudo_mode and ssh_allow_groups are global config and live in
+# inventory/group_vars/all.yml (overridden per host in host_vars). admin_user and
+# admin_pubkey_file are REQUIRED and normally come from host_vars.
+
+# ---------------------------------------------------------------------------
+# Hardening stage: bootstrap (create only) | harden (lockdown) | all
+# ---------------------------------------------------------------------------
+accounts_stage: all
+
+# 1.2 - lock the root account (passwd -l) once the admin is validated.
+accounts_lock_root: true
+
+# 1.5 - log all sudo commands (+ I/O logging).
+accounts_sudo_log: true
+accounts_sudo_logfile: /var/log/sudo.log
+
+# 1.8 - give login-enabled system/service accounts a nologin shell.
+accounts_lock_service_accounts: true
+accounts_sys_uid_max: 999
+accounts_service_shell_keep:
+  - /usr/sbin/nologin
+  - /sbin/nologin
+  - /bin/false
+  - /bin/sync
+
+# 1.9 - password aging policy (login.defs).
+accounts_pass_max_days: 90
+accounts_pass_min_days: 1
+accounts_pass_warn_age: 7
+
+# 1.10 - restrictive default umask (login.defs + profile.d).
+accounts_umask: "027"
+
+# 1.11 - interactive shell idle timeout, in seconds.
+accounts_tmout: 900
+
+# 1.12 - restrict 'su' to a group via pam_wheel.
+accounts_restrict_su: true
+accounts_su_group: sudo
+
+# 1.13 - remove unused accounts (off by default; audit always reports them).
+accounts_remove_unused: false
+accounts_unused_users: [games, gnats, irc, list, news, uucp]
+
+# 1.14 - cap concurrent logins per user via limits.conf (OPT). 0 = disabled.
+accounts_max_logins: 0

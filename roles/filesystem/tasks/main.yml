@@ -1,0 +1,11 @@
+---
+# filesystem - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit -> read-only mount/permission/SUID checks; apply -> harden mounts + perms.
+
+- name: "Filesystem | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Filesystem | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'

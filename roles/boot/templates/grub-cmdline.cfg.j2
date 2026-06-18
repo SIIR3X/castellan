@@ -1,0 +1,3 @@
+# Managed by Castellan - kernel security parameters (15.4). Do not edit.
+# Sourced after /etc/default/grub; appends to the kernel command line.
+GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX {{ boot_kernel_cmdline_params | join(' ') }}"

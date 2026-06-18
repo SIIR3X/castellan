@@ -1,0 +1,26 @@
+---
+# backup_config (setup).
+#
+# Prepares a single timestamped backup directory for the whole run. Other roles
+# back up individual files by including the per-file task:
+#
+#   - name: Back up a file before editing
+#     ansible.builtin.include_role:
+#       name: backup_config
+#       tasks_from: file
+#     vars:
+#       backup_config_file: /etc/ssh/sshd_config
+
+- name: "Backup config |Compute a single backup timestamp for this run"
+  ansible.builtin.set_fact:
+    backup_config_stamp: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+  when: backup_config_stamp is not defined
+
+- name: "Backup config |Ensure the run backup directory exists"
+  ansible.builtin.file:
+    path: "{{ castellan_backup_dir }}/{{ backup_config_stamp }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true

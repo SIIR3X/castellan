@@ -1,0 +1,103 @@
+---
+# updates (apply) - patch the system and enable automatic security updates.
+
+- name: "Updates | Ensure unattended-upgrades is installed"
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: "Updates | Apply all pending updates (6.1)"
+  ansible.builtin.apt:
+    upgrade: dist
+    update_cache: true
+  become: true
+  when: updates_full_upgrade | bool
+
+- name: "Updates | Back up apt periodic configuration before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/apt/apt.conf.d/20auto-upgrades
+    - /etc/apt/apt.conf.d/50unattended-upgrades
+    - /etc/apt/apt.conf.d/52castellan-unattended-upgrades
+    - /etc/apt/apt.conf.d/99castellan-apt-security
+
+- name: "Updates | Enable periodic security updates (6.2)"
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: "Updates | Restrict auto-upgrades to the security pocket (6.3)"
+  ansible.builtin.replace:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    # Comment the base release pocket so only the -security origins remain
+    # auto-installed. Idempotent (the commented line no longer matches) and
+    # reversible (backed up above). Ubuntu-shaped; a no-op on Debian, whose
+    # default already auto-installs the security label only.
+    regexp: '^(\s*)"\$\{distro_id\}:\$\{distro_codename\}";'
+    replace: '\1// "${distro_id}:${distro_codename}";'
+  become: true
+  when: updates_security_only | bool
+
+- name: "Updates | Configure auto-reboot and cleanup (6.4/6.5)"
+  ansible.builtin.template:
+    src: 52castellan-unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/52castellan-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: "Updates | Reject unauthenticated/insecure packages (6.6)"
+  ansible.builtin.template:
+    src: 99castellan-apt-security.conf.j2
+    dest: /etc/apt/apt.conf.d/99castellan-apt-security
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: updates_enforce_authenticity | bool
+
+- name: "Updates | Enable the apt timers"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  become: true
+
+# --- 6.8 Pending-update email alerts via apticron (opt-in) -------------------
+- name: "Updates | Pending-update email alerts (6.8)"
+  when:
+    - updates_pending_alert | bool
+    - notify_email | default('') | length > 0
+  block:
+    - name: "Updates | Install apticron (6.8)"
+      ansible.builtin.apt:
+        name: apticron
+        state: present
+        install_recommends: false
+      become: true
+
+    - name: "Updates | Set the apticron recipient (6.8)"
+      ansible.builtin.lineinfile:
+        path: /etc/apticron/apticron.conf
+        regexp: '^\s*EMAIL\s*='
+        line: 'EMAIL="{{ notify_email }}"'
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+      become: true

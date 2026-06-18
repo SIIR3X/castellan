@@ -1,0 +1,18 @@
+---
+# yamllint config for Castellan (also honored by ansible-lint).
+extends: default
+
+rules:
+  # Allow aligning values across lines for readable config templates.
+  colons:
+    max-spaces-after: -1
+  # Comments and docs can run a bit long.
+  line-length:
+    max: 160
+  # Permit the document-end-less style we use.
+  document-start: enable
+  # We rely on many teaching comments at varied indentation.
+  comments-indentation: disable
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
