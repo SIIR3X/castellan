@@ -57,6 +57,7 @@ tool; later connections use your `ssh-agent`.
 | Field | Class | Description | Default |
 |-------|-------|-------------|---------|
 | `ssh_port` | A | New SSH port (open it in ufw first) | 22 |
+| `ssh_address_family` | A | inet (IPv4) / any / inet6 | inet |
 | `ssh_allow_groups` | A | Groups allowed to connect | [ssh-users] |
 | `ssh_permit_root` | A | Allow root login | "no" |
 | `ssh_password_auth` | A | Allow password auth | "no" |
@@ -77,14 +78,20 @@ tool; later connections use your `ssh-agent`.
 | `f2b_maxretry` | A | Attempts before a ban | 3 |
 | `f2b_bantime` | A | Ban duration | 1h |
 
-### 2.6 Global
+### 2.6 Global and optional measure parameters
+
+Castellan applies **every** measure - there is no profile to pick. The only
+global knobs are the per-role toggles (all on by default) and the optional
+parameters that activate measures needing an external value.
 
 | Field | Class | Description | Default |
 |-------|-------|-------------|---------|
-| `hardening_profile` | A | minimal / standard / paranoid | standard |
-| `enable_<role>` | A | Force a role on or off regardless of the profile | per profile |
+| `enable_<role>` | A | Force a role off (e.g. `enable_boot=false`) | true (mfa: false) |
 | `auto_reboot` | A | Auto-reboot when a kernel update requires it | false |
-| `notify_email` | A | Email for alerts (optional) | (empty) |
+| `notify_email` | A | Email for update/login alerts (else syslog) | (empty) |
+| `audit_logging_syslog_target` | A | Forward logs to a remote syslog `host:port` | (empty) |
+| `boot_grub_password_hash` | A | Enables the GRUB password (grub-mkpasswd-pbkdf2) | (empty) |
+| `enable_mfa` | A | TOTP 2FA over SSH (needs per-user enrollment) | false |
 
 ## 3. Where each value is stored
 
@@ -111,16 +118,16 @@ unchanged.
 Example `host_vars/203.0.113.42.yml`, plaintext and git-safe (no secret inside):
 
 ```
-target_ip:         203.0.113.42
-connection_mode:   root_password
-initial_user:      root
-admin_user:        lucas
-admin_pubkey_file: files/public_keys/id_ed25519.pub
-sudo_mode:         nopasswd
-ssh_port:          2222
-ufw_allowed_ports: [80, 443]
-f2b_ignoreip:      ["198.51.100.10"]
-hardening_profile: standard
+target_ip:          203.0.113.42
+connection_mode:    root_password
+initial_user:       root
+admin_user:         lucas
+admin_pubkey_file:  files/public_keys/id_ed25519.pub
+sudo_mode:          nopasswd
+ssh_port:           2222
+ssh_address_family: inet
+ufw_allowed_ports:  [80, 443]
+f2b_ignoreip:       ["198.51.100.10"]
 ```
 
 ## 4. Secret handling rules
@@ -140,47 +147,51 @@ so the secret becomes useless. Storing it would add risk with no benefit.
 ## 5. The init wizard
 
 The user writes no YAML: the wizard asks the questions and generates the file.
-Where `whiptail` is present the menus are graphical; otherwise a plain text prompt
-is used.
+It is a plain, terminal-only questionnaire (no whiptail) - each prompt shows its
+`[default]` in brackets and an empty answer keeps it; nothing is pre-filled on the
+input line, so there is never stale text to erase. There is no profile or measure
+selection: Castellan applies every measure.
 
 ```
 $ castellan init 203.0.113.42
+  Interactive setup for '203.0.113.42'. Press Enter to accept a [default].
 
-  [ Initial connection ]
-  Connection mode           root + password
-  Initial user              root
-  Current SSH port          22
+  == Initial connection (first contact with the host) ==
+    Target IP or FQDN: 203.0.113.42
+    Connection method:
+      1) root + password
+      2) root + private key
+      3) existing user + sudo
+    choice [1]:
+    Initial SSH port [22]:
 
-  [ Admin user to create ]
-  Admin name                lucas
-  Public key to deploy      ~/.ssh/id_ed25519.pub   (detected)
-  Passwordless sudo         yes (recommended, key only)
+  == Admin identity to create ==
+    Admin user to create [castellan]: lucas
+    Public key to deploy (path) [~/.ssh/id_ed25519.pub]:
+    Sudo for the admin:
+      1) nopasswd (key only, automation)
+      2) password (2nd factor)
+    choice [1]:
 
-  [ Hardening ]
-  Profile                   standard
-  New SSH port              2222
-  Ports to open (firewall)  80, 443
-  Your IP (never banned)    198.51.100.10   (detected)
+  == SSH and firewall ==
+    Hardened SSH port (opened in ufw first) [22]: 2222
+    SSH address family:  1) IPv4 only  2) IPv4 + IPv6  3) IPv6 only
+    Extra ports to open (comma list, e.g. 80,443): 80,443
+    ...
 
-  Config written: inventory/host_vars/203.0.113.42.yml
-  No secret written to disk.
-  The initial password will be requested when running apply.
+  == Summary ==
+    ... review ...
+    Write this configuration? (y/n) [y]:
+  [+] Wrote inventory/host_vars/203.0.113.42.yml
 
 $ castellan apply 203.0.113.42 --ask-pass
   Initial password (root@203.0.113.42): ********   (not stored)
-  hardening in progress...
+  hardening in progress (live per-role checklist)...
 ```
 
-Fields the wizard can auto-detect for convenience:
-
-| Field | Detection |
-|-------|-----------|
-| `admin_pubkey_file` | Scans `~/.ssh/*.pub` and proposes the key found |
-| `f2b_ignoreip` | Detects the control machine's public IP |
-| `admin_user` | Proposes the local username |
-
-After `init`, refine the selection at any time with `castellan configure <host>`,
-which lists every role and lets you tick individual measures or a whole role.
+After `init`, edit a host's configuration at any time with
+`castellan configure <host>`: it replays the same questionnaire with the current
+values as defaults and rewrites the file.
 
 ## 6. Input validation
 
@@ -199,7 +210,7 @@ Castellan checks the configuration before acting, to avoid errors and lockout.
 
 | The user provides | How | It becomes |
 |-------------------|-----|------------|
-| IP, admin user, ports, profile | init wizard | `host_vars/<host>.yml` (plaintext, git-safe) |
+| IP, admin user, ports, optional params | init wizard | `host_vars/<host>.yml` (plaintext, git-safe) |
 | Their public key | path (auto-detected) | deployed from `files/public_keys/` |
 | The initial password | prompt at apply | nothing (memory, then forgotten) |
 | Sudo password (if chosen) | generated or prompt | hash in `vault.yml` (encrypted) |
