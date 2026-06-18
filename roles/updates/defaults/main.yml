@@ -8,9 +8,8 @@
 # 6.1 - bring the system fully up to date on first apply.
 updates_full_upgrade: true
 
-# 6.4 - automatic reboot for kernel updates, within a time window.
-auto_reboot: false
-auto_reboot_time: "02:00"
+# 6.4 - automatic reboot for kernel updates, within a time window. auto_reboot
+# and auto_reboot_time are global config (inventory/group_vars/all.yml).
 updates_auto_reboot_with_users: false
 
 # 6.3 - restrict automatic upgrades to the security pocket only (no -updates).

@@ -32,7 +32,7 @@
 
 - name: "Confinement | Read AppArmor profile modes (8.1)"
   ansible.builtin.command: aa-status --json
-  register: _conf_aa
+  register: _confinement_aa
   changed_when: false
   check_mode: false
   become: true
@@ -46,14 +46,14 @@
 # tolerated and only a real "Setting ... to enforce" counts as changed.
 - name: "Confinement | Switch complain-mode profiles to enforce (8.1)"
   ansible.builtin.command: "aa-enforce {{ item | quote }}"
-  register: _conf_enforce
-  changed_when: "'Setting ' in (_conf_enforce.stdout | default(''))"
+  register: _confinement_enforce
+  changed_when: "'Setting ' in (_confinement_enforce.stdout | default(''))"
   failed_when: false
   become: true
-  loop: "{{ _conf_complain | difference(confinement_apparmor_enforce_exclude) }}"
+  loop: "{{ _confinement_complain | difference(confinement_apparmor_enforce_exclude) }}"
   vars:
-    _conf_complain: >-
-      {{ ((_conf_aa.stdout | default('{}') | from_json).profiles | default({}))
+    _confinement_complain: >-
+      {{ ((_confinement_aa.stdout | default('{}') | from_json).profiles | default({}))
          | dict2items | selectattr('value', 'equalto', 'complain')
          | map(attribute='key') | list }}
   when:

@@ -29,5 +29,5 @@ them, so that `./harden rollback` can later restore them.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `castellan_backup_dir` | `/var/backups/castellan` | Base backup directory on the target. |
-| `castellan_backup_stamp` | computed per run | Timestamp subfolder; set once per play by `tasks/main.yml`. |
+| `backup_config_stamp` | computed per run | Timestamp subfolder; set once per play by `tasks/main.yml`. |
 | `backup_config_file` | (required by `file.yml`) | Absolute path of the file to back up. |

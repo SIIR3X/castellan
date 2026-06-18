@@ -12,15 +12,15 @@ audit_logging_auditd: true
 audit_logging_rules_key_prefix: castellan   # -k tag prefix is informational
 
 # --- 11.4 / 11.5 journald -----------------------------------------------------
-journald_storage: persistent
-journald_system_max_use: 500M
-journald_max_retention: 1month
+audit_logging_journald_storage: persistent
+audit_logging_journald_system_max_use: 500M
+audit_logging_journald_max_retention: 1month
 
 # --- 11.7 restrictive permissions on new log files (rsyslog) ------------------
 # Only applied when rsyslog is installed; existing Ubuntu logs are already 0640.
 audit_logging_rsyslog_perms: true
-rsyslog_file_create_mode: "0640"
-rsyslog_dir_create_mode: "0750"
+audit_logging_rsyslog_file_create_mode: "0640"
+audit_logging_rsyslog_dir_create_mode: "0750"
 
 # --- 11.9 reliable timestamps (time synchronisation) -------------------------
 audit_logging_require_timesync: true

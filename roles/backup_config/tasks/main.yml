@@ -13,12 +13,12 @@
 
 - name: "Backup config |Compute a single backup timestamp for this run"
   ansible.builtin.set_fact:
-    castellan_backup_stamp: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
-  when: castellan_backup_stamp is not defined
+    backup_config_stamp: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+  when: backup_config_stamp is not defined
 
 - name: "Backup config |Ensure the run backup directory exists"
   ansible.builtin.file:
-    path: "{{ castellan_backup_dir }}/{{ castellan_backup_stamp }}"
+    path: "{{ castellan_backup_dir }}/{{ backup_config_stamp }}"
     state: directory
     owner: root
     group: root

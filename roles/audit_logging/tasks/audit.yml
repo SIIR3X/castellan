@@ -3,7 +3,7 @@
 
 - name: "Audit logging | Check whether auditd is installed"
   ansible.builtin.command: dpkg-query -W -f='${Status}' auditd
-  register: _al_auditd_pkg
+  register: _audit_logging_auditd_pkg
   changed_when: false
   failed_when: false
   check_mode: false
@@ -11,7 +11,7 @@
 
 - name: "Audit logging | Read auditd service state"
   ansible.builtin.command: systemctl is-active auditd  # noqa: command-instead-of-module
-  register: _al_auditd_active
+  register: _audit_logging_auditd_active
   changed_when: false
   failed_when: false
   check_mode: false
@@ -19,7 +19,7 @@
 
 - name: "Audit logging | List loaded audit rules"
   ansible.builtin.command: auditctl -l
-  register: _al_rules
+  register: _audit_logging_rules
   changed_when: false
   failed_when: false
   check_mode: false
@@ -27,7 +27,7 @@
 
 - name: "Audit logging | Read auditd status (immutability) (11.3)"
   ansible.builtin.command: auditctl -s
-  register: _al_status
+  register: _audit_logging_status
   changed_when: false
   failed_when: false
   check_mode: false
@@ -36,12 +36,12 @@
 - name: "Audit logging | Stat the remote-syslog drop-in (11.6)"
   ansible.builtin.stat:
     path: /etc/rsyslog.d/99-castellan-remote.conf
-  register: _al_remote
+  register: _audit_logging_remote
   become: true
 
 - name: "Audit logging | Read effective journald configuration"
   ansible.builtin.command: systemd-analyze cat-config systemd/journald.conf
-  register: _al_journald
+  register: _audit_logging_journald
   changed_when: false
   failed_when: false
   check_mode: false
@@ -50,12 +50,12 @@
 - name: "Audit logging | Stat persistent journal directory"
   ansible.builtin.stat:
     path: /var/log/journal
-  register: _al_journal_dir
+  register: _audit_logging_journal_dir
   become: true
 
 - name: "Audit logging | Read NTP synchronisation state"
   ansible.builtin.command: timedatectl show -p NTP -p NTPSynchronized --value
-  register: _al_ntp
+  register: _audit_logging_ntp
   changed_when: false
   failed_when: false
   check_mode: false
@@ -64,7 +64,7 @@
 - name: "Audit logging | Stat session log files (11.8)"
   ansible.builtin.stat:
     path: "{{ item }}"
-  register: _al_session_logs
+  register: _audit_logging_session_logs
   loop:
     - /var/log/wtmp
     - /var/log/btmp
@@ -76,33 +76,33 @@
     msg:
       - >-
         11.1 auditd installed:
-        {{ 'ok' if 'install ok installed' in (_al_auditd_pkg.stdout | default('')) else 'FAIL' }}
+        {{ 'ok' if 'install ok installed' in (_audit_logging_auditd_pkg.stdout | default('')) else 'FAIL' }}
       - >-
         11.1 auditd active:
-        {{ 'ok' if (_al_auditd_active.stdout | default('') | trim) == 'active' else 'FAIL' }}
+        {{ 'ok' if (_audit_logging_auditd_active.stdout | default('') | trim) == 'active' else 'FAIL' }}
       - >-
         11.2 castellan audit rules loaded:
-        {{ 'ok' if (audit_logging_rules_key_prefix ~ '_') in (_al_rules.stdout | default('')) else 'FAIL' }}
+        {{ 'ok' if (audit_logging_rules_key_prefix ~ '_') in (_audit_logging_rules.stdout | default('')) else 'FAIL' }}
       - >-
         11.4 journald Storage=persistent:
-        {{ 'ok' if 'Storage=persistent' in (_al_journald.stdout | default('')) else 'FAIL' }}
+        {{ 'ok' if 'Storage=persistent' in (_audit_logging_journald.stdout | default('')) else 'FAIL' }}
       - >-
         11.4 persistent journal directory:
-        {{ 'ok' if _al_journal_dir.stat.exists else 'FAIL' }}
+        {{ 'ok' if _audit_logging_journal_dir.stat.exists else 'FAIL' }}
       - >-
         11.5 journald SystemMaxUse set:
-        {{ 'ok' if 'SystemMaxUse=' ~ journald_system_max_use in (_al_journald.stdout | default('')) else 'FAIL' }}
+        {{ 'ok' if 'SystemMaxUse=' ~ audit_logging_journald_system_max_use in (_audit_logging_journald.stdout | default('')) else 'FAIL' }}
       - >-
         11.8 session logs present (wtmp/btmp/lastlog):
-        {{ 'ok' if (_al_session_logs.results | map(attribute='stat.exists') | select | list | length) == 3 else 'FAIL' }}
+        {{ 'ok' if (_audit_logging_session_logs.results | map(attribute='stat.exists') | select | list | length) == 3 else 'FAIL' }}
       - >-
         11.9 time synchronisation active:
-        {{ 'ok' if 'yes' in (_al_ntp.stdout | default('')) else 'FAIL' }}
+        {{ 'ok' if 'yes' in (_audit_logging_ntp.stdout | default('')) else 'FAIL' }}
       - >-
         11.3 audit rules immutable:
-        {{ ('ok' if 'enabled 2' in (_al_status.stdout | default('')) else 'FAIL')
+        {{ ('ok' if 'enabled 2' in (_audit_logging_status.stdout | default('')) else 'FAIL')
            if audit_logging_immutable else 'off' }}
       - >-
         11.6 remote syslog forwarding:
-        {{ ('ok' if _al_remote.stat.exists else 'FAIL')
+        {{ ('ok' if _audit_logging_remote.stat.exists else 'FAIL')
            if audit_logging_remote_syslog else 'off' }}

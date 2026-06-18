@@ -5,25 +5,10 @@
 # Two stages: 'bootstrap' creates the admin (Play 1), 'harden' locks the system
 # down (Play 3, as the admin, after access is verified). 'all' does both.
 
-# Admin identity. admin_user and admin_pubkey_file are REQUIRED and normally
-# come from inventory/host_vars/<host>.yml; there is no safe default username.
-admin_user: ""
-admin_pubkey_file: ""
-
-# Login shell and any extra supplementary groups for the admin account. The
-# admin is always added to the sudo group and to every group in
-# ssh_allow_groups, so the later ssh role (AllowGroups) can never lock it out.
-admin_shell: /bin/bash
-admin_extra_groups: []
-
-# sudo behaviour:
-#   nopasswd : key-only automation account, passwordless sudo drop-in
-#   password : sudo requires the account password (provisioned via Vault)
-sudo_mode: nopasswd
-
-# SSH access group(s). Mirrors ssh_allow_groups (group_vars) so membership is
-# guaranteed before sshd is hardened. Kept here as a standalone-run fallback.
-ssh_allow_groups: [ssh-users]
+# Admin identity (admin_user, admin_pubkey_file, admin_shell, admin_extra_groups),
+# sudo_mode and ssh_allow_groups are global config and live in
+# inventory/group_vars/all.yml (overridden per host in host_vars). admin_user and
+# admin_pubkey_file are REQUIRED and normally come from host_vars.
 
 # ---------------------------------------------------------------------------
 # Hardening stage: bootstrap (create only) | harden (lockdown) | all

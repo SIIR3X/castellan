@@ -39,7 +39,7 @@
 # --- 10.4 Keep a local MTA on loopback only ----------------------------------
 - name: "Services | Check whether postfix is installed (10.4)"
   ansible.builtin.command: dpkg-query -W -f='${Status}' postfix
-  register: _svc_postfix
+  register: _services_postfix
   changed_when: false
   failed_when: false
   check_mode: false
@@ -47,7 +47,7 @@
 - name: "Services | Bind postfix to loopback only (10.4)"
   when:
     - services_mta_loopback | bool
-    - "'install ok installed' in (_svc_postfix.stdout | default(''))"
+    - "'install ok installed' in (_services_postfix.stdout | default(''))"
   block:
     - name: "Services | Back up postfix main.cf before changes (10.4)"
       ansible.builtin.include_role:
