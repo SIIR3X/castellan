@@ -60,7 +60,11 @@ cc_tui() { [ -n "${CASTELLAN_NO_TUI:-}" ] && return 1; command -v whiptail >/dev
 cc_input() {  # title default -> echoes value (may be empty)
   local title="$1" def="${2:-}"
   if cc_tui; then
-    whiptail --title "Castellan" --inputbox "$title" 10 72 "$def" 3>&1 1>&2 2>&3
+    # Show the default in the prompt text but leave the field empty (no
+    # pre-filled value to erase); apply the default only when left blank.
+    local label="$title"; [ -n "$def" ] && label="$title (default: ${def})"
+    local v; v="$(whiptail --title "Castellan" --inputbox "$label" 10 72 "" 3>&1 1>&2 2>&3)"
+    printf '%s' "${v:-$def}"
   else
     local v; read -r -p "$title [${def}]: " v; printf '%s' "${v:-$def}"
   fi

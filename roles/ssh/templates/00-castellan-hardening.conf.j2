@@ -2,10 +2,10 @@
 # Named 00- so it is read before 50-cloud-init.conf; sshd uses the first
 # obtained value for each directive, so these win. Do not edit by hand.
 
-# 2.6 - NOTE: the listening port is intentionally NOT set here. On a
-# socket-activated sshd (Ubuntu) a Port/ListenAddress directive makes sshd try
-# to bind the port itself on reload, conflicting with the systemd socket and
-# killing sshd. The port is owned by ssh.socket (managed separately by the role).
+# 2.6 - NOTE: the listening port is set in a dedicated drop-in
+# (10-castellan-port.conf) via the Port directive, not here. On Ubuntu 24.04 the
+# sshd-socket-generator reads that Port and configures ssh.socket; on a direct
+# sshd.service it is used as-is. See roles/ssh/tasks/apply.yml (2.6).
 
 # 2.1 - key-based authentication only.
 PubkeyAuthentication yes
