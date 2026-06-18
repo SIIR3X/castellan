@@ -5,7 +5,7 @@
 
 - name: "Audit logging | Detect whether rsyslog is installed"
   ansible.builtin.command: dpkg-query -W -f='${Status}' rsyslog
-  register: _al_rsyslog_pkg
+  register: _audit_logging_rsyslog_pkg
   changed_when: false
   failed_when: false
   check_mode: false
@@ -82,7 +82,7 @@
   become: true
   when:
     - audit_logging_rsyslog_perms | bool
-    - "'install ok installed' in (_al_rsyslog_pkg.stdout | default(''))"
+    - "'install ok installed' in (_audit_logging_rsyslog_pkg.stdout | default(''))"
   notify: "Audit logging | Restart rsyslog"
 
 # --- 11.6 forward logs to a remote syslog server (opt-in) --------------------
@@ -99,7 +99,7 @@
   when:
     - audit_logging_remote_syslog | bool
     - audit_logging_syslog_target | length > 0
-    - "'install ok installed' in (_al_rsyslog_pkg.stdout | default(''))"
+    - "'install ok installed' in (_audit_logging_rsyslog_pkg.stdout | default(''))"
   notify: "Audit logging | Restart rsyslog"
 
 # --- 11.9 reliable timestamps (time synchronisation) -------------------------
@@ -113,7 +113,7 @@
 
 - name: "Audit logging | Read current NTP enablement (11.9)"
   ansible.builtin.command: timedatectl show -p NTP --value
-  register: _al_ntp
+  register: _audit_logging_ntp
   changed_when: false
   check_mode: false
   become: true
@@ -125,4 +125,4 @@
   become: true
   when:
     - audit_logging_require_timesync | bool
-    - (_al_ntp.stdout | default('') | trim) != 'yes'
+    - (_audit_logging_ntp.stdout | default('') | trim) != 'yes'

@@ -4,35 +4,11 @@
 # Maps to docs/security-measures.md section 4 (ufw). Lockout-critical: the SSH
 # port is opened BEFORE ufw is enabled (4.3), never the other way round.
 
-# 4.1 / 4.2 - default policies.
-ufw_default_incoming: deny
-ufw_default_outgoing: allow
-
-# 4.5 - extra service ports to open (tcp), e.g. [80, 443]. SSH is handled
-# separately and always opened first.
-ufw_allowed_ports: []
-
-# 4.4 - rate-limit SSH (ignored when ufw_admin_source_ip restricts the source).
-ufw_rate_limit_ssh: true
-
-# 4.6 - firewall logging (on | off | low | medium | high | full).
-ufw_logging: "on"
-
-# 4.8 - keep IPv6 filtering consistent with IPv4.
-ufw_ipv6: true
-
-# 4.9 - drop ICMP echo-request (ping) in before.rules (opt-in; ping is a useful
-# diagnostic, so off by default).
-ufw_block_icmp_echo: false
-
-# 4.7 - kernel anti-spoofing. The default before.rules already drops INVALID
-# packets; this adds reverse-path filtering, martian logging and no source
-# routing. (rp_filter=1 is strict; fine for single-homed hosts.)
-ufw_antispoof: true
-
+# All ufw tunables (ufw_default_incoming/outgoing 4.1/4.2, ufw_allowed_ports 4.5,
+# ufw_rate_limit_ssh 4.4, ufw_logging 4.6, ufw_ipv6 4.8, ufw_block_icmp_echo 4.9,
+# ufw_antispoof 4.7) and ssh_port are global config and live in
+# inventory/group_vars/all.yml (overridden per host in host_vars).
+#
 # 4.10 - optional: restrict SSH to a single source IP. Leave undefined to allow
 # SSH from anywhere (rate-limited). Set e.g. ufw_admin_source_ip: 198.51.100.10
-# ufw_admin_source_ip: ""
-
-# SSH port to open before enabling (mirrors the ssh role / group_vars).
-ssh_port: 22
+# in host_vars / group_vars.

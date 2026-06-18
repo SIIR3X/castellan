@@ -58,20 +58,20 @@
 # --- 9.3 Harden /home (only when it is a separate mount) ---------------------
 - name: "Filesystem | Locate /home as a separate mount (9.3)"
   ansible.builtin.set_fact:
-    _fs_home: "{{ ansible_mounts | default([]) | selectattr('mount', 'equalto', '/home') | list | first | default({}) }}"
+    _filesystem_home: "{{ ansible_mounts | default([]) | selectattr('mount', 'equalto', '/home') | list | first | default({}) }}"
   when: filesystem_harden_home | bool
 
 - name: "Filesystem | Add nosuid,nodev to /home (9.3)"
   ansible.posix.mount:
     path: /home
-    src: "{{ _fs_home.device }}"
-    fstype: "{{ _fs_home.fstype }}"
-    opts: "{{ ((_fs_home.options | default('defaults')).split(',') + ['nosuid', 'nodev']) | unique | join(',') }}"
+    src: "{{ _filesystem_home.device }}"
+    fstype: "{{ _filesystem_home.fstype }}"
+    opts: "{{ ((_filesystem_home.options | default('defaults')).split(',') + ['nosuid', 'nodev']) | unique | join(',') }}"
     state: mounted
   become: true
   when:
     - filesystem_harden_home | bool
-    - _fs_home.device is defined
+    - _filesystem_home.device is defined
 
 # --- 9.9 Disable USB mass-storage automount ---------------------------------
 - name: "Filesystem | Blacklist USB mass-storage modules (9.9)"
@@ -102,25 +102,25 @@
 
     - name: "Filesystem | Locate the quota mount (9.10)"
       ansible.builtin.set_fact:
-        _fs_q: "{{ ansible_mounts | default([]) | selectattr('mount', 'equalto', filesystem_quota_mount) | list | first | default({}) }}"
+        _filesystem_q: "{{ ansible_mounts | default([]) | selectattr('mount', 'equalto', filesystem_quota_mount) | list | first | default({}) }}"
 
     - name: "Filesystem | Enable usrquota/grpquota on the mount (9.10)"
       ansible.posix.mount:
         path: "{{ filesystem_quota_mount }}"
-        src: "{{ _fs_q.device }}"
-        fstype: "{{ _fs_q.fstype }}"
-        opts: "{{ ((_fs_q.options | default('defaults')).split(',') + ['usrquota', 'grpquota']) | unique | join(',') }}"
+        src: "{{ _filesystem_q.device }}"
+        fstype: "{{ _filesystem_q.fstype }}"
+        opts: "{{ ((_filesystem_q.options | default('defaults')).split(',') + ['usrquota', 'grpquota']) | unique | join(',') }}"
         state: mounted
       become: true
-      when: _fs_q.device is defined
+      when: _filesystem_q.device is defined
 
     - name: "Filesystem | Turn on quotas for the mount (9.10)"
       ansible.builtin.command: "quotaon -ug {{ filesystem_quota_mount }}"
       become: true
-      register: _fs_quotaon
-      changed_when: "'already on' not in (_fs_quotaon.stderr | default(''))"
+      register: _filesystem_quotaon
+      changed_when: "'already on' not in (_filesystem_quotaon.stderr | default(''))"
       failed_when: false
-      when: _fs_q.device is defined
+      when: _filesystem_q.device is defined
 
 # --- 9.4 / 9.5 / 9.6 Targeted remediation (opt-in lists; default no-op) ------
 - name: "Filesystem | Strip SUID/SGID bit from listed binaries (9.4)"

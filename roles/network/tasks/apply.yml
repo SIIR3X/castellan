@@ -27,7 +27,7 @@
 # --- 14.1 Trusted DNS / DNSSEC -----------------------------------------------
 - name: "Network | Detect whether systemd-resolved is active (14.1)"
   ansible.builtin.command: systemctl is-active systemd-resolved  # noqa: command-instead-of-module
-  register: _net_resolved
+  register: _network_resolved
   changed_when: false
   failed_when: false
   check_mode: false
@@ -36,7 +36,7 @@
 - name: "Network | Harden systemd-resolved DNS settings (14.1)"
   when:
     - network_harden_dns | bool
-    - (_net_resolved.stdout | default('') | trim) == 'active'
+    - (_network_resolved.stdout | default('') | trim) == 'active'
   block:
     - name: "Network | Ensure resolved drop-in directory exists (14.1)"
       ansible.builtin.file:
