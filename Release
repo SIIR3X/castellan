@@ -1,0 +1,23 @@
+Architectures: all
+Codename: stable
+Components: main
+Date: Thu, 18 Jun 2026 08:58:09 +0000
+Label: Castellan
+Origin: Castellan
+Suite: stable
+MD5Sum:
+ 704b5295f4089bfcfc004bb2742c5fa1             1139 Packages
+ 681ecb355edf5857bbe6d1919f13b5c5              763 Packages.gz
+ 0e3897fc3b1d5ee2a910b84c88d8ad9f              140 Release
+SHA1:
+ 698bda422489620faf6c5923603285ba22c5b161             1139 Packages
+ 7da73cda20bd270194c7db10e32602fc88c7a55d              763 Packages.gz
+ 349f65688d67cff5004937604b92d75199131ec8              140 Release
+SHA256:
+ 7352b0903a01f497a654ad7af16b6930bf621ddb3306bd3261d7176c9ffa0b82             1139 Packages
+ e5c845b977bbfcfdb97bc65c8591469416f347b5ece5da6016a9a1a36b800507              763 Packages.gz
+ 0cf1960ef80090a43f248eb0462c2c0af4f5d45fb0115c7d42793c9b3a7795fd              140 Release
+SHA512:
+ 208ae450d788113d9342fa41f4e2149b2b4222d190293e17834c5f9682a07ec156d482ba4a64e83e40ecb3c3b02a0322d8cc1da66bc026007ef61e5f55c38885             1139 Packages
+ 32b8844a9280d9e1c0974e0467d9f619dea29f56c8c9af812fd9f37ebf3f084c65fa432fae4ee5301fdce67595d3bc0927f12ca959b064050929722366728a54              763 Packages.gz
+ 4445e589b32ac276bf4410e78a7ec2d45b305e24ddf6d81b6e57377006e8557293adebe6f8504c04946d96b56b374fd3b9cd91f0036d6cfd39574ff9a9789c68              140 Release
