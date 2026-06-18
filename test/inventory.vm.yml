@@ -35,3 +35,12 @@ all:
           # Never ban the control path during tests (WSL reaches the VM via the
           # Windows host's LAN IP). Loopback is always ignored on top.
           f2b_ignoreip: ["192.168.1.0/24"]
+
+          # Allow SSH from the control subnet WITHOUT ufw's rate-limit (4.10):
+          # the e2e fires many SSH sessions in quick succession (audit -> apply
+          # -> re-audit -> re-apply -> checks), which would otherwise trip
+          # 'ufw limit' (6 conns / 30s) and self-block the control host. With an
+          # admin source set, the firewall opens 'allow from <subnet>' instead of
+          # 'limit', so the cycle never rate-limits itself. Production keeps the
+          # limit (ufw_admin_source_ip unset by default).
+          ufw_admin_source_ip: "192.168.1.0/24"
