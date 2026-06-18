@@ -1,0 +1,44 @@
+---
+# boot role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 15 (boot & GRUB). The role is
+# disabled by default (enable_boot: false): on a VPS the console is managed by
+# the host, so most of these measures are OPT. Only 15.2 (grub.cfg permissions)
+# is a recommended baseline and runs whenever the role is enabled. The OPT
+# measures below are individually gated and default to off. 15.3 (disable boot
+# from external media) is a BIOS/console concern and is out of scope for an
+# agentless tool.
+
+# --- 15.2 Strict permissions on grub.cfg (REC, on when the role is enabled) ---
+boot_grub_cfg_perms: true
+boot_grub_cfg_mode: "0600"
+# The real, generated boot config (ext4). On EFI installs the
+# /boot/efi/EFI/*/grub.cfg stub is deliberately NOT listed: it lives on the
+# vfat EFI System Partition where Unix permissions come from the mount options
+# (fmask/dmask), so chmod is a silent no-op, and the stub holds no secrets.
+boot_grub_cfg_paths:
+  - /boot/grub/grub.cfg
+
+# --- 15.5 Disable Ctrl-Alt-Del reboot (OPT, opt-in) --------------------------
+# Masks ctrl-alt-del.target so a console key combo cannot trigger a reboot.
+boot_disable_ctrl_alt_del: false
+
+# --- 15.4 Kernel security parameters (OPT, opt-in) ---------------------------
+# Appended to GRUB_CMDLINE_LINUX via a /etc/default/grub.d drop-in, then
+# update-grub regenerates grub.cfg. Effective on the next reboot. Kept to widely
+# safe values; add CPU/workload-specific flags (e.g. mitigations=auto) per host.
+boot_harden_kernel_cmdline: false
+boot_kernel_cmdline_params:
+  - slab_nomerge
+  - init_on_alloc=1
+  - init_on_free=1
+
+# --- 15.1 GRUB password (OPT, opt-in) ----------------------------------------
+# Protects editing boot entries and the GRUB command line. Booting the default
+# menu entry stays password-free (entries are marked --unrestricted) so
+# unattended reboots are not blocked. You MUST supply a PBKDF2 hash generated
+# with `grub-mkpasswd-pbkdf2` (never a plaintext password). With no hash the
+# task is skipped with a warning.
+boot_set_grub_password: false
+boot_grub_superuser: admin
+boot_grub_password_hash: ""

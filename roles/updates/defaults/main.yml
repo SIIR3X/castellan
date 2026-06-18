@@ -1,0 +1,26 @@
+---
+# updates role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 6. Not lockout-critical, but a
+# kernel auto-reboot is disabled by default (auto_reboot) so a server never
+# reboots unexpectedly during a hardening run.
+
+# 6.1 - bring the system fully up to date on first apply.
+updates_full_upgrade: true
+
+# 6.4 - automatic reboot for kernel updates, within a time window. auto_reboot
+# and auto_reboot_time are global config (inventory/group_vars/all.yml).
+updates_auto_reboot_with_users: false
+
+# 6.3 - restrict automatic upgrades to the security pocket only (no -updates).
+updates_security_only: true
+
+# 6.5 - clean up obsolete packages and old kernels.
+updates_remove_unused: true
+
+# 6.6 - refuse unauthenticated/insecure packages and repositories.
+updates_enforce_authenticity: true
+
+# 6.8 - email a daily report of pending updates via apticron (opt-in; needs a
+# working MTA and a recipient in notify_email).
+updates_pending_alert: false

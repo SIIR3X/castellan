@@ -1,0 +1,19 @@
+---
+# auditd cannot be restarted via systemctl (refused); rules are (re)loaded with
+# augenrules instead. journald and rsyslog restart normally.
+- name: "Audit logging | Load audit rules"
+  ansible.builtin.command: augenrules --load  # noqa: command-instead-of-module
+  changed_when: false
+  become: true
+
+- name: "Audit logging | Restart journald"
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted
+  become: true
+
+- name: "Audit logging | Restart rsyslog"
+  ansible.builtin.systemd_service:
+    name: rsyslog
+    state: restarted
+  become: true

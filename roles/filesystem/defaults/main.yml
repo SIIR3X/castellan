@@ -1,0 +1,47 @@
+---
+# filesystem role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 9 (filesystem & mounts). Mixed risk:
+# 9.7 (sensitive file permissions) is safe and CRIT; the mount hardening adds
+# noexec/nosuid/nodev to temp filesystems (noexec on /tmp can upset some
+# installers, hence per-mount toggles). SUID/world-writable/unowned scans are
+# AUDIT-only by default - the tool reports them and only remediates the EXACT
+# paths you list (never a blind bulk chmod). 9.8 (LUKS) is out of scope;
+# 9.3/9.9/9.10 are opt-in below.
+
+# --- 9.1 / 9.2 Mount hardening (tmpfs with noexec,nosuid,nodev) ---------------
+filesystem_harden_tmp: true          # /tmp as a hardened tmpfs
+filesystem_harden_dev_shm: true      # add noexec to /dev/shm
+# /var/tmp as tmpfs is volatile (loses cross-reboot persistence), so opt-in.
+filesystem_harden_var_tmp: false
+filesystem_tmp_opts: "rw,nosuid,nodev,noexec,mode=1777"
+filesystem_dev_shm_opts: "rw,nosuid,nodev,noexec,inode64"
+
+# --- 9.7 Strict permissions on sensitive files (CRIT) ------------------------
+# Ubuntu uses the 'shadow' group for shadow files (0640). Adjust if your distro
+# differs.
+filesystem_sensitive_files:
+  - {path: /etc/passwd, owner: root, group: root, mode: "0644"}
+  - {path: /etc/group, owner: root, group: root, mode: "0644"}
+  - {path: /etc/shadow, owner: root, group: shadow, mode: "0640"}
+  - {path: /etc/gshadow, owner: root, group: shadow, mode: "0640"}
+
+# --- 9.3 Harden /home with nosuid,nodev (opt-in; only if /home is a separate
+# mount, otherwise skipped). ---------------------------------------------------
+filesystem_harden_home: false
+
+# --- 9.9 Disable USB mass-storage automount (opt-in; safe on a headless VPS) --
+filesystem_disable_usb: false
+filesystem_usb_modules: [usb-storage, uas]
+
+# --- 9.10 Disk quotas (opt-in, advanced) -------------------------------------
+# Installs quota tooling and, on a SEPARATE configured mount, enables usrquota/
+# grpquota. Leave off unless you have a dedicated data partition.
+filesystem_enable_quotas: false
+filesystem_quota_mount: /home
+
+# --- 9.4 / 9.5 / 9.6 Targeted remediation (opt-in; the scans stay audit-only) -
+# List the EXACT paths to fix - never a blind bulk chmod. Empty = report only.
+filesystem_suid_strip: []           # 9.4 - remove the SUID/SGID bit from these
+filesystem_world_writable_fix: []   # 9.5 - remove world-write (o-w) from these
+filesystem_unowned_chown: []        # 9.6 - chown root:root these

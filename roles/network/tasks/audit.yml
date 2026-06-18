@@ -1,0 +1,66 @@
+---
+# network (audit) - read-only checks mapped to section 14; no changes.
+
+- name: "Network | Resolve how each rare protocol would load (14.3)"
+  ansible.builtin.command: "modprobe -n -v {{ item }}"
+  register: _network_modprobe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop: "{{ network_blacklist_protocols }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Network | Read effective resolved configuration (14.1)"
+  ansible.builtin.command: systemd-analyze cat-config systemd/resolved.conf
+  register: _network_resolved_cfg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Read NTP synchronisation state (14.2, owned by audit_logging)"
+  ansible.builtin.command: timedatectl show -p NTP --value
+  register: _network_ntp
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Read rp_filter (14.8, owned by firewall)"
+  ansible.builtin.command: sysctl -n net.ipv4.conf.all.rp_filter
+  register: _network_rpfilter
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Stat the wireless-blacklist drop-in (14.4)"
+  ansible.builtin.stat:
+    path: /etc/modprobe.d/castellan-wireless.conf
+  register: _network_wireless
+  become: true
+
+- name: "Network | Read ufw outgoing default policy (14.7)"
+  ansible.builtin.command: ufw status verbose
+  register: _network_ufw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Report section 14 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _network_report | from_yaml }}
+  vars:
+    _network_report: |
+      {% for r in _network_modprobe.results %}
+      - "14.3 {{ r.item }} disabled: {{ 'ok' if '/bin/true' in (r.stdout | default('')) else 'FAIL' }}"
+      {% endfor %}
+      - "14.1 DNSSEC={{ network_dnssec }}: {{ 'ok' if 'DNSSEC=' ~ network_dnssec in (_network_resolved_cfg.stdout | default('')) else 'FAIL' }}"
+      - "14.2 time sync active (audit_logging): {{ 'ok' if (_network_ntp.stdout | default('') | trim) == 'yes' else 'FAIL' }}"
+      - "14.8 rp_filter anti-spoof (firewall): {{ 'ok' if (_network_rpfilter.stdout | default('') | trim) == '1' else 'FAIL' }}"
+      - "14.4 wireless disabled: {{ 'ok' if _network_wireless.stat.exists else ('FAIL' if network_disable_wireless else 'off') }}"
+      - "14.7 egress filtering: {{ ('ok' if 'deny (outgoing)' in (_network_ufw.stdout | default('')) else 'FAIL') if network_egress_filter else 'off' }}"

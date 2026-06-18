@@ -1,0 +1,131 @@
+---
+# Castellan global defaults.
+#
+# These values apply to every host and are overridden by per-host files in
+# inventory/host_vars/<host>.yml. Keep secrets OUT of this file (see
+# docs/config.md); use Ansible Vault for anything sensitive.
+
+# ---------------------------------------------------------------------------
+# Run mode - set by the ./harden wrapper (audit | apply).
+# ---------------------------------------------------------------------------
+castellan_mode: apply
+
+# ---------------------------------------------------------------------------
+# Hardening profile - selects which roles run.
+#   minimal  : the lockout-critical spine + security updates + reporting
+#   standard : minimal + all low-risk hardening roles  (recommended default)
+#   paranoid : standard + the opt-in roles (confinement, integrity, boot)
+# Override per run with `-e hardening_profile=paranoid` or per host in host_vars.
+# An unknown profile name falls back to standard (the harden play also asserts).
+# ---------------------------------------------------------------------------
+hardening_profile: standard
+
+castellan_profiles:
+  minimal:
+    - accounts
+    - ssh
+    - firewall
+    - fail2ban
+    - updates
+    - compliance
+  standard:
+    - accounts
+    - ssh
+    - firewall
+    - fail2ban
+    - updates
+    - sysctl
+    - pam
+    - audit_logging
+    - services
+    - network
+    - filesystem
+    - cron
+    - compliance
+  paranoid:
+    - accounts
+    - ssh
+    - firewall
+    - fail2ban
+    - updates
+    - sysctl
+    - pam
+    - audit_logging
+    - services
+    - network
+    - filesystem
+    - cron
+    - compliance
+    - confinement
+    - integrity
+    - boot
+
+# Role set selected by the active profile (falls back to standard for an unknown
+# profile name).
+castellan_active_roles: "{{ castellan_profiles[hardening_profile] | default(castellan_profiles['standard']) }}"
+
+# ---------------------------------------------------------------------------
+# Module toggles - each role runs when its name is in the active profile above.
+# Override any of these per host (host_vars) or per run (-e enable_X=true|false)
+# to force a role on/off regardless of the profile. mfa is in NO profile (it
+# needs TOTP enrollment), so enable it explicitly with enable_mfa: true.
+# ---------------------------------------------------------------------------
+enable_accounts:      "{{ 'accounts' in castellan_active_roles }}"
+enable_ssh:           "{{ 'ssh' in castellan_active_roles }}"
+enable_mfa:           "{{ 'mfa' in castellan_active_roles }}"
+enable_firewall:      "{{ 'firewall' in castellan_active_roles }}"
+enable_fail2ban:      "{{ 'fail2ban' in castellan_active_roles }}"
+enable_updates:       "{{ 'updates' in castellan_active_roles }}"
+enable_sysctl:        "{{ 'sysctl' in castellan_active_roles }}"
+enable_confinement:   "{{ 'confinement' in castellan_active_roles }}"
+enable_filesystem:    "{{ 'filesystem' in castellan_active_roles }}"
+enable_services:      "{{ 'services' in castellan_active_roles }}"
+enable_audit_logging: "{{ 'audit_logging' in castellan_active_roles }}"
+enable_integrity:     "{{ 'integrity' in castellan_active_roles }}"
+enable_pam:           "{{ 'pam' in castellan_active_roles }}"
+enable_network:       "{{ 'network' in castellan_active_roles }}"
+enable_boot:          "{{ 'boot' in castellan_active_roles }}"
+enable_cron:          "{{ 'cron' in castellan_active_roles }}"
+enable_compliance:    "{{ 'compliance' in castellan_active_roles }}"
+
+# ---------------------------------------------------------------------------
+# Sensible defaults (overridable per host).
+# ---------------------------------------------------------------------------
+# Access (admin_user / admin_pubkey_file are normally set per host in host_vars)
+admin_user:         ""
+admin_pubkey_file:  ""
+admin_shell:        /bin/bash
+admin_extra_groups: []
+sudo_mode:          nopasswd
+
+# SSH
+ssh_port:          22
+ssh_allow_groups:  [ssh-users]
+ssh_permit_root:   "no"
+ssh_password_auth: "no"
+
+# Firewall (ufw)
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+ufw_allowed_ports:    []
+ufw_rate_limit_ssh:   true
+ufw_logging:          "on"
+ufw_ipv6:             true
+ufw_block_icmp_echo:  false
+ufw_antispoof:        true
+
+# Fail2ban
+f2b_ignoreip:          []
+f2b_maxretry:          3
+f2b_bantime:           1h
+f2b_findtime:          10m
+f2b_bantime_increment: true
+f2b_backend:           systemd
+f2b_banaction:         ufw
+
+# Updates
+auto_reboot:      false
+auto_reboot_time: "02:00"
+
+# Backups (consumed by the backup_config role)
+castellan_backup_dir: /var/backups/castellan

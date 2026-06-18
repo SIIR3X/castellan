@@ -1,0 +1,4 @@
+# Managed by Castellan - cron/at access whitelist (16.1). Do not edit by hand.
+{% for u in cron_allow_users | unique %}
+{{ u }}
+{% endfor %}

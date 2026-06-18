@@ -1,0 +1,13 @@
+---
+# accounts (apply) - orchestrate by stage.
+#   bootstrap : create the admin (Play 1, initial creds)
+#   harden    : lock the system down (Play 3, as the admin, post-verify)
+#   all       : both (standalone runs)
+
+- name: "Accounts | Create the admin identity"
+  ansible.builtin.include_tasks: create.yml
+  when: accounts_stage | default('all') in ['bootstrap', 'all']
+
+- name: "Accounts | Apply account hardening"
+  ansible.builtin.include_tasks: harden.yml
+  when: accounts_stage | default('all') in ['harden', 'all']

@@ -1,0 +1,25 @@
+---
+# compliance role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 18. Runs the Lynis system audit as an
+# external, independent measure of the hardening (the "hardening index"), then
+# fetches a timestamped report to the control machine. Read-only on the target.
+
+# Install Lynis from apt if missing.
+compliance_lynis_install: true
+
+# Where to store fetched reports on the control machine (relative to repo root).
+compliance_report_dir: reports
+
+# Fetch the raw Lynis files (log + report data) alongside the summary.
+compliance_fetch: true
+
+# 18.2 - schedule a periodic re-audit on the target (systemd timer) to detect
+# configuration drift.
+compliance_periodic_audit: true
+compliance_audit_oncalendar: weekly
+
+# 18.5 - alert on security events (SSH logins) via a PAM hook (opt-in). Sends to
+# notify_email through `mail` when available, otherwise logs to syslog with tag
+# 'castellan-alert' (works without an MTA; pairs with remote syslog / a SIEM).
+compliance_alerting: false

@@ -24,6 +24,9 @@ secrets.yaml
 .ansible/
 fact_cache/
 
+# Local test harness secrets (disposable container keys) - never commit
+test/secrets/
+
 # Generated reports (folder tracked via .gitkeep, contents ignored)
 reports/*
 !reports/.gitkeep
@@ -42,3 +45,6 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Build output
+/dist/

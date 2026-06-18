@@ -1,0 +1,46 @@
+---
+# Test-only inventory for the disposable Hyper-V VM target (Tier 3).
+#
+# Real Ubuntu Server VM on the LAN (External switch): real systemd, kernel,
+# bootloader, partitions, reboot -> lets us test the whole tool, not just the
+# parts a container can fake. Used by overriding Ansible's inventory:
+#   ANSIBLE_INVENTORY=test/inventory.vm.yml ./harden apply 192.168.1.43
+# (see test/run-vm.sh). Never replaces the real inventory/hosts.yml.
+#
+# The initial account is the installer user 'lucas' (sudo). Castellan's
+# bootstrap then creates the dedicated 'castellan' admin and Play 2 reconnects
+# as it. The key path points at the gitignored disposable test key.
+all:
+  children:
+    vps:
+      hosts:
+        192.168.1.43:
+          # Initial contact: installer user over sudo, key-based, default port.
+          target_ip: 192.168.1.43
+          connection_mode: user_sudo
+          initial_user: lucas
+          initial_port: 22
+          ansible_ssh_private_key_file: test/secrets/id_test
+
+          # Admin identity Castellan creates and then verifies.
+          admin_user: castellan
+          admin_pubkey_file: test/secrets/id_test.pub
+          sudo_mode: nopasswd
+
+          # Port-change test (2.6): bootstrap connects on initial_port; the
+          # ssh role moves the listener to ssh_port via ssh.socket.
+          ssh_port: 22
+          ssh_allow_groups: [ssh-users]
+
+          # Never ban the control path during tests (WSL reaches the VM via the
+          # Windows host's LAN IP). Loopback is always ignored on top.
+          f2b_ignoreip: ["192.168.1.0/24"]
+
+          # Allow SSH from the control subnet WITHOUT ufw's rate-limit (4.10):
+          # the e2e fires many SSH sessions in quick succession (audit -> apply
+          # -> re-audit -> re-apply -> checks), which would otherwise trip
+          # 'ufw limit' (6 conns / 30s) and self-block the control host. With an
+          # admin source set, the firewall opens 'allow from <subnet>' instead of
+          # 'limit', so the cycle never rate-limits itself. Production keeps the
+          # limit (ufw_admin_source_ip unset by default).
+          ufw_admin_source_ip: "192.168.1.0/24"

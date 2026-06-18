@@ -1,0 +1,25 @@
+# Managed by Castellan - record of the applied hardening state (18.6).
+# The configuration itself is versioned in git; this documents what ran here.
+castellan_applied: true
+applied_at_utc: "{{ compliance_stamp }}"
+hardening_profile: "{{ hardening_profile | default('standard') }}"
+castellan_mode: "{{ castellan_mode | default('apply') }}"
+lynis_hardening_index: "{{ compliance_hardening_index | default('unknown') }}"
+enabled_roles:
+  accounts: {{ enable_accounts | default(true) }}
+  ssh: {{ enable_ssh | default(true) }}
+  mfa: {{ enable_mfa | default(false) }}
+  firewall: {{ enable_firewall | default(true) }}
+  fail2ban: {{ enable_fail2ban | default(true) }}
+  updates: {{ enable_updates | default(true) }}
+  sysctl: {{ enable_sysctl | default(true) }}
+  pam: {{ enable_pam | default(true) }}
+  audit_logging: {{ enable_audit_logging | default(true) }}
+  services: {{ enable_services | default(true) }}
+  network: {{ enable_network | default(true) }}
+  confinement: {{ enable_confinement | default(false) }}
+  filesystem: {{ enable_filesystem | default(true) }}
+  cron: {{ enable_cron | default(true) }}
+  integrity: {{ enable_integrity | default(false) }}
+  boot: {{ enable_boot | default(false) }}
+  compliance: {{ enable_compliance | default(true) }}

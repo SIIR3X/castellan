@@ -1,0 +1,4 @@
+---
+# audit_logging creates drop-ins for auditd, journald and rsyslog; it backs them
+# up via backup_config inside apply.yml rather than as a hard role dependency.
+dependencies: []

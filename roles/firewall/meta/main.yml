@@ -1,0 +1,4 @@
+---
+# firewall edits ufw config files; it backs them up via backup_config inside
+# apply.yml rather than as a hard role dependency.
+dependencies: []

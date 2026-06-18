@@ -1,0 +1,29 @@
+---
+# accounts - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit  -> read-only checks (audit.yml)
+# apply  -> create.yml (stage bootstrap/all) and/or harden.yml (stage harden/all)
+
+- name: "Accounts | Validate the admin username"
+  ansible.builtin.assert:
+    that:
+      - admin_user | length > 0
+    fail_msg: "accounts requires 'admin_user' (set it in inventory/host_vars/<host>.yml)."
+    quiet: true
+
+- name: "Accounts | Validate the admin public key (creation stages)"
+  ansible.builtin.assert:
+    that:
+      - admin_pubkey_file | length > 0
+    fail_msg: "accounts (create) requires 'admin_pubkey_file'."
+    quiet: true
+  when: accounts_stage | default('all') in ['bootstrap', 'all']
+
+- name: "Accounts | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when:
+    - castellan_mode | default('apply') == 'audit'
+    - accounts_stage | default('all') != 'bootstrap'
+
+- name: "Accounts | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'

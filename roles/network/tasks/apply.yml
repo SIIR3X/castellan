@@ -1,0 +1,95 @@
+---
+# network (apply) - disable rare protocols and harden DNS (section 14).
+# Low lockout risk: no SSH/firewall path; DNS resolver is left untouched unless
+# explicitly overridden. New drop-ins are backed up for rollback.
+
+- name: "Network | Back up network drop-ins before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/modprobe.d/castellan-network.conf
+    - /etc/systemd/resolved.conf.d/99-castellan-dns.conf
+    - /etc/modprobe.d/castellan-wireless.conf
+
+# --- 14.3 Disable rare network protocols -------------------------------------
+- name: "Network | Blacklist rare network protocols (14.3)"
+  ansible.builtin.template:
+    src: castellan-network.conf.j2
+    dest: /etc/modprobe.d/castellan-network.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+# --- 14.1 Trusted DNS / DNSSEC -----------------------------------------------
+- name: "Network | Detect whether systemd-resolved is active (14.1)"
+  ansible.builtin.command: systemctl is-active systemd-resolved  # noqa: command-instead-of-module
+  register: _network_resolved
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Network | Harden systemd-resolved DNS settings (14.1)"
+  when:
+    - network_harden_dns | bool
+    - (_network_resolved.stdout | default('') | trim) == 'active'
+  block:
+    - name: "Network | Ensure resolved drop-in directory exists (14.1)"
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: true
+
+    - name: "Network | Configure DNSSEC / DoT on systemd-resolved (14.1)"
+      ansible.builtin.template:
+        src: 99-castellan-dns.conf.j2
+        dest: /etc/systemd/resolved.conf.d/99-castellan-dns.conf
+        owner: root
+        group: root
+        mode: "0644"
+      become: true
+      notify: "Network | Restart systemd-resolved"
+
+# --- 14.4 Disable wireless modules (opt-in) ----------------------------------
+- name: "Network | Blacklist wireless modules (14.4)"
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/castellan-wireless.conf
+    content: |
+      # Managed by Castellan (14.4) - disable wireless interfaces.
+      {% for m in network_wireless_modules %}
+      install {{ m }} /bin/true
+      blacklist {{ m }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: network_disable_wireless | bool
+
+# --- 14.7 Egress filtering via ufw (opt-in, DANGEROUS) -----------------------
+- name: "Network | Egress (outbound) filtering (14.7)"
+  when: network_egress_filter | bool
+  block:
+    - name: "Network | Allow required outbound ports before deny (14.7)"
+      community.general.ufw:
+        rule: allow
+        direction: out
+        to_port: "{{ item.port | string }}"
+        protocol: "{{ item.proto }}"
+      become: true
+      loop: "{{ network_egress_allowed }}"
+      loop_control:
+        label: "{{ item.port }}/{{ item.proto }}"
+
+    - name: "Network | Set default-deny outgoing (14.7)"
+      community.general.ufw:
+        direction: outgoing
+        policy: deny
+      become: true

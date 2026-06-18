@@ -1,0 +1,16 @@
+# Managed by Castellan - MFA / 2FA on SSH (section 3). Do not edit by hand.
+# Read after 00-castellan-hardening.conf; it only sets directives that file does
+# not, so drop-in order is not significant here.
+
+# 3.1 - PAM drives the TOTP (keyboard-interactive) challenge.
+UsePAM yes
+
+# 3.4 - require BOTH a public key AND keyboard-interactive (TOTP). A code alone
+# can never replace the key. The admin / automation account(s) are exempted just
+# below so their non-interactive key login never needs a code.
+AuthenticationMethods publickey,keyboard-interactive
+{% for u in mfa_exempt_users %}
+Match User {{ u }}
+    AuthenticationMethods publickey
+Match all
+{% endfor %}

@@ -1,0 +1,61 @@
+.TH CASTELLAN 1 "2026" "Castellan" "User Commands"
+.SH NAME
+castellan \- agentless hardening of Ubuntu and Debian servers
+.SH SYNOPSIS
+.B castellan
+.I command
+.RI [ host | target "] [" args ...]
+.SH DESCRIPTION
+Castellan applies security hardening to Ubuntu/Debian servers over SSH, driven
+by Ansible. It runs a read-only audit and an idempotent apply in a strict
+anti-lockout order, with selectable profiles and an interactive setup. Nothing
+is installed on the target.
+.PP
+Per-host configuration is stored under
+.IR ~/.config/castellan/host_vars/ ;
+fetched reports under
+.IR ~/.config/castellan/reports/ .
+.SH COMMANDS
+.TP
+.B init \fIhost\fR
+Interactive setup of a new host (wizard).
+.TP
+.B configure \fIhost\fR
+Pick the profile and individual measures (roles then a checklist).
+.TP
+.B list
+List configured hosts, their profile and enabled measures.
+.TP
+.B audit \fItarget\fR [args...]
+Read-only compliance audit (no changes).
+.TP
+.B apply \fItarget\fR [args...]
+Apply hardening.
+.TP
+.B rollback \fItarget\fR [args...]
+Restore the latest backup.
+.TP
+.B report \fItarget\fR
+Show the latest report per host.
+.PP
+.I target
+is any Ansible host pattern: a single host, a comma-separated list, an
+inventory group, or \fBall\fR. Extra arguments are passed to
+.BR ansible-playbook (1).
+.SH EXAMPLES
+.nf
+castellan init srv-01
+castellan apply srv-01 --ask-pass -e hardening_profile=paranoid
+castellan apply web1,web2 --only ssh,firewall
+.fi
+.SH FILES
+.TP
+.I /usr/share/castellan
+Program files (playbooks, roles, library).
+.TP
+.I ~/.config/castellan
+Per-user host configuration, keys and reports.
+.SH LICENSE
+MIT. Copyright (c) 2026 Lucas Fagioli.
+.SH SEE ALSO
+.BR ansible-playbook (1)

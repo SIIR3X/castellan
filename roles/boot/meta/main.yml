@@ -1,0 +1,5 @@
+---
+# boot edits GRUB configuration (grub.cfg permissions, an optional kernel
+# cmdline drop-in, and an optional superuser/password snippet); every file it
+# changes is backed up via backup_config inside apply.yml.
+dependencies: []

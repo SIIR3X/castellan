@@ -1,0 +1,14 @@
+---
+# firewall role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 4 (ufw). Lockout-critical: the SSH
+# port is opened BEFORE ufw is enabled (4.3), never the other way round.
+
+# All ufw tunables (ufw_default_incoming/outgoing 4.1/4.2, ufw_allowed_ports 4.5,
+# ufw_rate_limit_ssh 4.4, ufw_logging 4.6, ufw_ipv6 4.8, ufw_block_icmp_echo 4.9,
+# ufw_antispoof 4.7) and ssh_port are global config and live in
+# inventory/group_vars/all.yml (overridden per host in host_vars).
+#
+# 4.10 - optional: restrict SSH to a single source IP. Leave undefined to allow
+# SSH from anywhere (rate-limited). Set e.g. ufw_admin_source_ip: 198.51.100.10
+# in host_vars / group_vars.

@@ -1,0 +1,17 @@
+---
+# Castellan master playbook.
+#
+# Orchestrates the four plays in the mandatory anti-lockout order described in
+# docs/architecture.md (section 3). Run it through the ./harden wrapper, which
+# sets castellan_mode (audit|apply) and the --limit host.
+- name: "Castellan | Import Play 1 - Bootstrap"
+  import_playbook: 00-bootstrap.yml
+
+- name: "Castellan | Import Play 2 - Verify access"
+  import_playbook: 01-verify-access.yml
+
+- name: "Castellan | Import Play 3 - Harden"
+  import_playbook: 10-harden.yml
+
+- name: "Castellan | Import Play 4 - Report"
+  import_playbook: 99-report.yml

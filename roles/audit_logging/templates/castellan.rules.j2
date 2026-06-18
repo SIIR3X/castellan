@@ -1,0 +1,45 @@
+# Managed by Castellan - audit rules (11.2). Do not edit by hand.
+# CIS-style coverage; immutability ('-e 2', 11.3) is appended at the very end
+# only when audit_logging_immutable is true (it locks the rules until reboot).
+
+# Identity and account files
+-w /etc/passwd -p wa -k {{ audit_logging_rules_key_prefix }}_identity
+-w /etc/group -p wa -k {{ audit_logging_rules_key_prefix }}_identity
+-w /etc/shadow -p wa -k {{ audit_logging_rules_key_prefix }}_identity
+-w /etc/gshadow -p wa -k {{ audit_logging_rules_key_prefix }}_identity
+-w /etc/security/opasswd -p wa -k {{ audit_logging_rules_key_prefix }}_identity
+
+# Privilege escalation / scope
+-w /etc/sudoers -p wa -k {{ audit_logging_rules_key_prefix }}_scope
+-w /etc/sudoers.d/ -p wa -k {{ audit_logging_rules_key_prefix }}_scope
+
+# Time changes
+-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -k {{ audit_logging_rules_key_prefix }}_time
+-a always,exit -F arch=b32 -S adjtimex,settimeofday,clock_settime -k {{ audit_logging_rules_key_prefix }}_time
+-w /etc/localtime -p wa -k {{ audit_logging_rules_key_prefix }}_time
+
+# Kernel module loading/unloading
+-w /sbin/insmod -p x -k {{ audit_logging_rules_key_prefix }}_modules
+-w /sbin/rmmod -p x -k {{ audit_logging_rules_key_prefix }}_modules
+-w /sbin/modprobe -p x -k {{ audit_logging_rules_key_prefix }}_modules
+-a always,exit -F arch=b64 -S init_module,delete_module,finit_module -k {{ audit_logging_rules_key_prefix }}_modules
+-a always,exit -F arch=b32 -S init_module,delete_module,finit_module -k {{ audit_logging_rules_key_prefix }}_modules
+
+# Logins and sessions
+-w /var/log/lastlog -p wa -k {{ audit_logging_rules_key_prefix }}_logins
+-w /var/log/faillog -p wa -k {{ audit_logging_rules_key_prefix }}_logins
+-w /var/run/faillock -p wa -k {{ audit_logging_rules_key_prefix }}_logins
+-w /var/log/wtmp -p wa -k {{ audit_logging_rules_key_prefix }}_session
+-w /var/log/btmp -p wa -k {{ audit_logging_rules_key_prefix }}_session
+-w /var/run/utmp -p wa -k {{ audit_logging_rules_key_prefix }}_session
+
+# Authentication and access configuration
+-w /etc/login.defs -p wa -k {{ audit_logging_rules_key_prefix }}_login
+-w /etc/pam.d/ -p wa -k {{ audit_logging_rules_key_prefix }}_pam
+-w /etc/ssh/sshd_config -p wa -k {{ audit_logging_rules_key_prefix }}_sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k {{ audit_logging_rules_key_prefix }}_sshd
+{% if audit_logging_immutable | bool %}
+
+# 11.3 - lock the rule set (immutable until reboot). MUST be the last directive.
+-e 2
+{% endif %}

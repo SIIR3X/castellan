@@ -1,0 +1,12 @@
+# Managed by Castellan - password complexity policy (13.1). Do not edit by hand.
+minlen = {{ pam_pwquality_minlen }}
+dcredit = {{ pam_pwquality_dcredit }}
+ucredit = {{ pam_pwquality_ucredit }}
+ocredit = {{ pam_pwquality_ocredit }}
+lcredit = {{ pam_pwquality_lcredit }}
+minclass = {{ pam_pwquality_minclass }}
+difok = {{ pam_pwquality_difok }}
+retry = {{ pam_pwquality_retry }}
+{% if pam_pwquality_enforce_for_root %}
+enforce_for_root
+{% endif %}

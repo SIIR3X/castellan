@@ -1,0 +1,5 @@
+# Managed by Castellan - password history (13.3/13.6). Do not edit by hand.
+remember = {{ pam_pwhistory_remember }}
+{% if pam_pwhistory_enforce_for_root %}
+enforce_for_root
+{% endif %}

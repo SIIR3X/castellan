@@ -1,0 +1,76 @@
+---
+# updates (audit) - read-only checks. Reports deviations mapped to
+# docs/security-measures.md section 6; never changes the host.
+
+- name: "Updates | Check unattended-upgrades is installed"
+  ansible.builtin.command: which unattended-upgrade
+  register: _updates_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | Read the effective periodic setting"
+  ansible.builtin.command: apt-config dump APT::Periodic::Unattended-Upgrade
+  register: _updates_periodic
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | Check apticron is installed (6.8)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' apticron
+  register: _updates_apticron
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | Read the effective allowed origins (6.3)"
+  ansible.builtin.command: apt-config dump Unattended-Upgrade::Allowed-Origins
+  register: _updates_origins
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | Read the package-authenticity setting (6.6)"
+  ansible.builtin.command: apt-config dump APT::Get::AllowUnauthenticated
+  register: _updates_allowunauth
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Updates | List third-party apt sources (6.7)"
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    patterns: ["*.list", "*.sources"]
+  register: _updates_repos
+  become: true
+
+- name: "Updates | Report compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        6.2 unattended-upgrades installed:
+        {{ 'ok' if _updates_installed.rc == 0 else 'FAIL' }}
+      - >-
+        6.2 periodic unattended-upgrade enabled:
+        {{ 'ok' if ('1' in (_updates_periodic.stdout | default(''))) else 'FAIL' }}
+      - >-
+        6.3 security-only auto-upgrades:
+        {{ 'ok' if (('security' in (_updates_origins.stdout | default('') | lower))
+        and not (['-updates', '-proposed', '-backports', 'codename}"']
+        | select('in', _updates_origins.stdout | default(''))) | list | length)
+        else 'CHECK' }}
+      - >-
+        6.6 unauthenticated packages refused:
+        {{ 'ok' if ('"false"' in (_updates_allowunauth.stdout | default('') | lower)) else 'CHECK' }}
+      - >-
+        6.7 third-party apt sources ({{ _updates_repos.matched | default(0) }}):
+        {{ (_updates_repos.files | default([]) | map(attribute='path') | map('basename') | list) | join(', ') | default('none', true) }}
+      - >-
+        6.8 pending-update alerts (apticron):
+        {{ ('ok' if 'install ok installed' in (_updates_apticron.stdout | default('')) else 'FAIL')
+           if updates_pending_alert else 'off' }}

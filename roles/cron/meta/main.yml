@@ -1,0 +1,4 @@
+---
+# cron creates cron.allow / at.allow and tightens crontab permissions; the new
+# allow files are backed up via backup_config inside apply.yml.
+dependencies: []

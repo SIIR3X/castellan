@@ -1,0 +1,4 @@
+---
+# pam edits /etc/pam.d/common-* and /etc/security/*.conf; it backs them up via
+# backup_config inside apply.yml rather than as a hard role dependency.
+dependencies: []

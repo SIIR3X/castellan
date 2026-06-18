@@ -1,0 +1,4 @@
+---
+# compliance only reads the system (Lynis audit) and fetches a report; it has
+# no dependencies and changes nothing on the target.
+dependencies: []

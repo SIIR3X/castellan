@@ -1,0 +1,99 @@
+---
+# services (apply) - minimize installed packages and running units (section 10).
+# Conservative: package removal/unit disable act only on what is present, and
+# the lists exclude anything lockout-critical (ssh, firewall, networking, DNS).
+
+# --- 10.1 Remove unnecessary network services --------------------------------
+# apt with state=absent is a no-op for packages that are not installed.
+- name: "Services | Purge legacy network packages (10.1)"
+  ansible.builtin.apt:
+    name: "{{ services_unwanted_packages }}"
+    state: absent
+    purge: true
+  become: true
+
+# --- 10.2 Disable unused services --------------------------------------------
+- name: "Services | Gather service facts (10.2)"
+  ansible.builtin.service_facts:
+  become: true
+
+- name: "Services | Stop and disable unused services (10.2)"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  become: true
+  loop: "{{ services_disable }}"
+  when: (item ~ '.service') in ansible_facts.services
+
+- name: "Services | Mask unused services (10.2)"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  become: true
+  loop: "{{ services_disable }}"
+  when:
+    - services_mask | bool
+    - (item ~ '.service') in ansible_facts.services
+
+# --- 10.4 Keep a local MTA on loopback only ----------------------------------
+- name: "Services | Check whether postfix is installed (10.4)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' postfix
+  register: _services_postfix
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Services | Bind postfix to loopback only (10.4)"
+  when:
+    - services_mta_loopback | bool
+    - "'install ok installed' in (_services_postfix.stdout | default(''))"
+  block:
+    - name: "Services | Back up postfix main.cf before changes (10.4)"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/postfix/main.cf
+
+    - name: "Services | Set postfix inet_interfaces to loopback-only (10.4)"
+      ansible.builtin.lineinfile:
+        path: /etc/postfix/main.cf
+        regexp: '^\s*inet_interfaces\s*='
+        line: "inet_interfaces = loopback-only"
+        state: present
+      become: true
+      notify: "Services | Reload postfix"
+
+# --- 10.5 Remove compilers / build tools (opt-in) ----------------------------
+- name: "Services | Remove compilers and build tools (10.5)"
+  ansible.builtin.apt:
+    name: "{{ services_compiler_packages }}"
+    state: absent
+    purge: true
+  become: true
+  when: services_remove_compilers | bool
+
+# --- 10.6 Disable IPv6 entirely (opt-in) -------------------------------------
+- name: "Services | Disable IPv6 via sysctl (10.6)"
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-castellan-disable-ipv6.conf
+    content: |
+      # Managed by Castellan (10.6) - disable IPv6 entirely.
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+      net.ipv6.conf.lo.disable_ipv6 = 1
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: services_disable_ipv6 | bool
+  notify: "Services | Reload sysctl"
+
+# --- 10.7 Clean up orphaned packages -----------------------------------------
+- name: "Services | Remove orphaned packages (10.7)"
+  ansible.builtin.apt:
+    autoremove: true
+    purge: true
+  become: true
+  when: services_autoremove | bool

@@ -1,0 +1,14 @@
+---
+# Reapply sysctl settings after the anti-spoofing file changes (4.7). Fires only
+# when the file actually changes, so the role stays idempotent. There is no
+# module to reload all sysctl files, hence the command.
+- name: "Firewall | Reload sysctl"
+  ansible.builtin.command: sysctl --system  # noqa: command-instead-of-module
+  changed_when: false
+  become: true
+
+# Re-read before.rules after a 4.9 change. ufw is already enabled by this point.
+- name: "Firewall | Reload ufw"
+  ansible.builtin.command: ufw reload  # noqa: command-instead-of-module
+  changed_when: false
+  become: true

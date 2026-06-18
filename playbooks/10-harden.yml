@@ -1,0 +1,110 @@
+---
+# Play 3 - Harden.
+#
+# Applies all hardening roles as the new admin, in the mandatory anti-lockout
+# order: firewall -> fail2ban -> ssh -> everything else. sshd is reloaded ONCE,
+# through a handler flushed at the very end. See docs/architecture.md (section 3).
+- name: "Castellan | Play 3 - Harden"
+  hosts: vps
+  gather_facts: true
+  become: true
+  vars:
+    ansible_user: "{{ admin_user }}"
+    ansible_port: "{{ initial_port | default(22) }}"
+
+  pre_tasks:
+    # Tagged 'always' so the profile check and announce run on targeted
+    # --tags/--only runs too.
+    - name: "Harden | Validate the hardening profile name"
+      ansible.builtin.assert:
+        that:
+          - hardening_profile | default('standard') in castellan_profiles
+        fail_msg: >-
+          Unknown hardening_profile '{{ hardening_profile }}'. Valid profiles:
+          {{ castellan_profiles.keys() | list | join(', ') }}.
+        quiet: true
+      tags: [always]
+
+    - name: "Harden | Announce run parameters"
+      ansible.builtin.debug:
+        msg: >-
+          [harden] mode={{ castellan_mode | default('apply') }},
+          profile={{ hardening_profile | default('standard') }},
+          roles={{ castellan_active_roles | join(', ') }}.
+          Roles run in lockout-safe order.
+      tags: [always]
+
+  roles:
+    # Lockout-critical first. Each role reads castellan_mode to switch between
+    # audit (read-only) and apply.
+    - role: firewall      # open the SSH port BEFORE enabling ufw
+      when: enable_firewall | default(true)
+      tags: [firewall]
+
+    - role: fail2ban      # ignoreip = your IP, before any ban can hit you
+      when: enable_fail2ban | default(true)
+      tags: [fail2ban]
+
+    - role: ssh           # disable root/password, harden crypto (reload at end)
+      when: enable_ssh | default(true)
+      tags: [ssh]
+
+    - role: mfa           # TOTP 2FA on SSH (opt-in; key+code, admin exempted)
+      when: enable_mfa | default(false)
+      tags: [mfa]
+
+    - role: accounts      # account lockdown (lock root LAST, post-verify)
+      when: enable_accounts | default(true)
+      vars:
+        accounts_stage: harden
+      tags: [accounts]
+
+    - role: updates       # patch + enable unattended security updates
+      when: enable_updates | default(true)
+      tags: [updates]
+
+    - role: sysctl        # kernel/network/filesystem tunables (no lockout path)
+      when: enable_sysctl | default(true)
+      tags: [sysctl]
+
+    - role: pam           # password policy + faillock (pamd-safe; admin uses key)
+      when: enable_pam | default(true)
+      tags: [pam]
+
+    - role: audit_logging  # auditd + persistent journald (no lockout path)
+      when: enable_audit_logging | default(true)
+      tags: [audit_logging]
+
+    - role: services      # purge/disable unused services (explicit denylists)
+      when: enable_services | default(true)
+      tags: [services]
+
+    - role: network       # blacklist rare protocols + DNS hardening
+      when: enable_network | default(true)
+      tags: [network]
+
+    - role: confinement   # AppArmor enforce + rare-FS blacklist (opt-in)
+      when: enable_confinement | default(false)
+      tags: [confinement]
+
+    - role: filesystem    # temp-mount hardening + sensitive file perms
+      when: enable_filesystem | default(true)
+      tags: [filesystem]
+
+    - role: cron          # restrict cron/at access + crontab perms
+      when: enable_cron | default(true)
+      tags: [cron]
+
+    - role: integrity     # AIDE baseline + debsums (opt-in; slow baseline)
+      when: enable_integrity | default(false)
+      tags: [integrity]
+
+    - role: boot          # GRUB perms + opt-in cmdline/password (opt-in role)
+      when: enable_boot | default(false)
+      tags: [boot]
+
+  post_tasks:
+    # Flush handlers explicitly so sshd is reloaded ONCE, after every role's
+    # change is in place (anti-lockout: never reload sshd mid-play).
+    - name: "Harden | Reload services once, at the very end"
+      ansible.builtin.meta: flush_handlers

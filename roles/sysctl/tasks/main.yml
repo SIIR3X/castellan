@@ -1,0 +1,11 @@
+---
+# sysctl - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit -> read-only parameter checks; apply -> deploy the drop-in and reload.
+
+- name: "Sysctl | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Sysctl | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'

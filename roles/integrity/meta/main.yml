@@ -1,0 +1,4 @@
+---
+# integrity installs AIDE/debsums and builds the AIDE baseline; it does not edit
+# pre-existing config files, so it has no backup_config dependency.
+dependencies: []

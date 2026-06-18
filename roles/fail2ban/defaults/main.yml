@@ -1,0 +1,11 @@
+---
+# fail2ban role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 5. Anti-lockout: trusted sources go
+# in f2b_ignoreip (5.6) so the admin can never ban themselves. Config lives in
+# /etc/fail2ban/jail.local; jail.conf is never edited.
+
+# All fail2ban tunables (f2b_ignoreip 5.6, f2b_maxretry/f2b_findtime 5.3,
+# f2b_bantime/f2b_bantime_increment 5.4, f2b_backend 5.5, f2b_banaction 5.7) and
+# ssh_port are global config and live in inventory/group_vars/all.yml (overridden
+# per host in host_vars).

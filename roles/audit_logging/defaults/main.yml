@@ -1,0 +1,34 @@
+---
+# audit_logging role - default values (overridden by group_vars/host_vars).
+#
+# Maps to docs/security-measures.md section 11 (audit & logging). Low lockout
+# risk: it touches auditd, journald and rsyslog, never the SSH/auth path. Audit
+# rules are NOT made immutable by default (11.3 is OPT) so they reload without a
+# reboot and stay idempotent. 11.3 (immutable) and 11.6 (remote syslog) are
+# opt-in below; 11.10 alerting is handled by the separate alerting hook.
+
+# --- 11.1 / 11.2 auditd -------------------------------------------------------
+audit_logging_auditd: true
+audit_logging_rules_key_prefix: castellan   # -k tag prefix is informational
+
+# --- 11.4 / 11.5 journald -----------------------------------------------------
+audit_logging_journald_storage: persistent
+audit_logging_journald_system_max_use: 500M
+audit_logging_journald_max_retention: 1month
+
+# --- 11.7 restrictive permissions on new log files (rsyslog) ------------------
+# Only applied when rsyslog is installed; existing Ubuntu logs are already 0640.
+audit_logging_rsyslog_perms: true
+audit_logging_rsyslog_file_create_mode: "0640"
+audit_logging_rsyslog_dir_create_mode: "0750"
+
+# --- 11.9 reliable timestamps (time synchronisation) -------------------------
+audit_logging_require_timesync: true
+
+# --- 11.3 make audit rules immutable (opt-in; -e 2 locks them until reboot) ---
+audit_logging_immutable: false
+
+# --- 11.6 forward logs to a remote syslog server (opt-in; needs rsyslog) ------
+# @@ = TCP delivery; set the target to "host:port".
+audit_logging_remote_syslog: false
+audit_logging_syslog_target: ""

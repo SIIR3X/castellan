@@ -1,0 +1,92 @@
+---
+# confinement (apply) - AppArmor enforce, rare-FS blacklist, unit sandboxing.
+# Off by default (enable_confinement). Conservative: bulk-enforce skips excluded
+# profiles, and systemd sandboxing only touches units the operator lists.
+
+- name: "Confinement | Back up the filesystem blacklist before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: /etc/modprobe.d/castellan-filesystems.conf
+
+# --- 8.1 / 8.2 AppArmor -------------------------------------------------------
+- name: "Confinement | Install AppArmor and utilities (8.1)"
+  ansible.builtin.apt:
+    name:
+      - apparmor
+      - apparmor-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: confinement_apparmor | bool
+
+- name: "Confinement | Enable and start AppArmor at boot (8.2)"
+  ansible.builtin.service:
+    name: apparmor
+    state: started
+    enabled: true
+  become: true
+  when: confinement_apparmor | bool
+
+- name: "Confinement | Read AppArmor profile modes (8.1)"
+  ansible.builtin.command: aa-status --json
+  register: _confinement_aa
+  changed_when: false
+  check_mode: false
+  become: true
+  when:
+    - confinement_apparmor | bool
+    - confinement_apparmor_enforce_all | bool
+
+# aa-enforce resolves a profile via its executable in PATH; profiles whose
+# binary is not installed (orphaned, e.g. shipped transmission profiles) cannot
+# be enforced and are harmless (no process to confine), so failures are
+# tolerated and only a real "Setting ... to enforce" counts as changed.
+- name: "Confinement | Switch complain-mode profiles to enforce (8.1)"
+  ansible.builtin.command: "aa-enforce {{ item | quote }}"
+  register: _confinement_enforce
+  changed_when: "'Setting ' in (_confinement_enforce.stdout | default(''))"
+  failed_when: false
+  become: true
+  loop: "{{ _confinement_complain | difference(confinement_apparmor_enforce_exclude) }}"
+  vars:
+    _confinement_complain: >-
+      {{ ((_confinement_aa.stdout | default('{}') | from_json).profiles | default({}))
+         | dict2items | selectattr('value', 'equalto', 'complain')
+         | map(attribute='key') | list }}
+  when:
+    - confinement_apparmor | bool
+    - confinement_apparmor_enforce_all | bool
+
+# --- 8.8 Disable loading of rare filesystem modules --------------------------
+- name: "Confinement | Blacklist rare filesystem modules (8.8)"
+  ansible.builtin.template:
+    src: castellan-filesystems.conf.j2
+    dest: /etc/modprobe.d/castellan-filesystems.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+# --- 8.3 / 8.4 systemd unit sandboxing (opt-in) ------------------------------
+- name: "Confinement | Apply systemd sandboxing to selected units (8.3/8.4)"
+  ansible.builtin.template:
+    src: 99-castellan-hardening.conf.j2
+    dest: "/etc/systemd/system/{{ item }}.service.d/99-castellan-hardening.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  loop: "{{ confinement_harden_units }}"
+  notify: "Confinement | Reload systemd daemon"
+
+- name: "Confinement | Restart hardened units to apply the sandbox (8.3/8.4)"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: restarted
+    daemon_reload: true
+  become: true
+  loop: "{{ confinement_harden_units }}"
+  when: confinement_harden_restart | bool

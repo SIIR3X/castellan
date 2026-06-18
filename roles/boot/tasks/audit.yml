@@ -1,0 +1,56 @@
+---
+# boot (audit) - read-only checks for section 15.
+
+- name: "Boot | Stat grub.cfg candidates (15.2)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _boot_grub_cfg
+  loop: "{{ boot_grub_cfg_paths }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true
+
+- name: "Boot | Check ctrl-alt-del.target state (15.5)"
+  ansible.builtin.command: systemctl is-enabled ctrl-alt-del.target  # noqa: command-instead-of-module
+  register: _boot_cad
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Boot | Stat kernel cmdline drop-in (15.4)"
+  ansible.builtin.stat:
+    path: /etc/default/grub.d/99-castellan-cmdline.cfg
+  register: _boot_cmdline_stat
+  become: true
+
+- name: "Boot | Stat GRUB password snippet (15.1)"
+  ansible.builtin.stat:
+    path: /etc/grub.d/41_castellan_password
+  register: _boot_pw_stat
+  become: true
+
+- name: "Boot | Report section 15 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _boot_report | from_yaml }}
+  vars:
+    _present: "{{ _boot_grub_cfg.results | selectattr('stat.exists') | list }}"
+    _bad: "{{ _present | rejectattr('stat.mode', 'equalto', boot_grub_cfg_mode) | map(attribute='item') | list }}"
+    _s152: >-
+      {{ 'n/a (no grub.cfg found)' if _present | length == 0
+         else ('ok' if _bad | length == 0 else 'FAIL ' ~ (_bad | join(','))) }}
+    _s155: >-
+      {{ ('ok' if _boot_cad.stdout == 'masked' else 'not masked')
+         if boot_disable_ctrl_alt_del else 'skipped (opt-in)' }}
+    _s154: >-
+      {{ ('ok' if _boot_cmdline_stat.stat.exists else 'absent')
+         if boot_harden_kernel_cmdline else 'skipped (opt-in)' }}
+    _s151: >-
+      {{ ('ok' if _boot_pw_stat.stat.exists else 'absent')
+         if boot_set_grub_password else 'skipped (opt-in)' }}
+    _boot_report: |
+      - "15.2 grub.cfg mode {{ boot_grub_cfg_mode }}: {{ _s152 }}"
+      - "15.5 ctrl-alt-del masked: {{ _s155 }}"
+      - "15.4 kernel cmdline drop-in: {{ _s154 }}"
+      - "15.1 GRUB password set: {{ _s151 }}"

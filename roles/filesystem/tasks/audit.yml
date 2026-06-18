@@ -1,0 +1,94 @@
+---
+# filesystem (audit) - read-only checks mapped to section 9; no changes.
+
+- name: "Filesystem | Read mount options for temp filesystems (9.1/9.2)"
+  ansible.builtin.command: "findmnt -no OPTIONS {{ item }}"
+  register: _filesystem_mounts
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop:
+    - /tmp
+    - /dev/shm
+    - /var/tmp
+    - /home
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Filesystem | Stat the USB-blacklist drop-in (9.9)"
+  ansible.builtin.stat:
+    path: /etc/modprobe.d/castellan-usb.conf
+  register: _filesystem_usb
+  become: true
+
+- name: "Filesystem | Count SUID/SGID binaries (9.4)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find /usr /bin /sbin /opt -xdev -type f \( -perm -4000 -o -perm -2000 \) 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: _filesystem_suid
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Filesystem | Count world-writable files/dirs without sticky bit (9.5)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find / -xdev -type d -perm -0002 ! -perm -1000 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: _filesystem_ww
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Filesystem | Count files without a known owner/group (9.6)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find / -xdev \( -nouser -o -nogroup \) 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: _filesystem_unowned
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Filesystem | Stat sensitive files (9.7)"
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  register: _filesystem_sensitive
+  loop: "{{ filesystem_sensitive_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  become: true
+
+- name: "Filesystem | Report section 9 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _filesystem_report | from_yaml }}
+  vars:
+    _filesystem_req: [noexec, nosuid, nodev]
+    _filesystem_tmp: "{{ _filesystem_mounts.results[0].stdout | default('') }}"
+    _filesystem_shm: "{{ _filesystem_mounts.results[1].stdout | default('') }}"
+    _filesystem_home: "{{ _filesystem_mounts.results[3].stdout | default('') }}"
+    _filesystem_home_ok: "{{ ['nosuid', 'nodev'] | reject('in', _filesystem_home) | list | length == 0 }}"
+    _filesystem_home_state: "{{ ('ok' if _filesystem_home_ok else 'FAIL') if _filesystem_home | length > 0 else 'n/a (not a separate mount)' }}"
+    _filesystem_ww_n: "{{ _filesystem_ww.stdout | default('0') | trim | int }}"
+    _filesystem_un_n: "{{ _filesystem_unowned.stdout | default('0') | trim | int }}"
+    _filesystem_report: |
+      - "9.1 /tmp hardened: {{ 'ok' if (_filesystem_req | reject('in', _filesystem_tmp) | list | length == 0) else 'FAIL' }}"
+      - "9.2 /dev/shm hardened: {{ 'ok' if (_filesystem_req | reject('in', _filesystem_shm) | list | length == 0) else 'FAIL' }}"
+      - "9.3 /home nosuid,nodev: {{ _filesystem_home_state if filesystem_harden_home else 'off' }}"
+      - "9.9 USB storage blacklisted: {{ 'ok' if _filesystem_usb.stat.exists else ('FAIL' if filesystem_disable_usb else 'off') }}"
+      - "9.4 SUID/SGID binaries (review): {{ _filesystem_suid.stdout | default('?') | trim }}"
+      - "9.5 world-writable dirs w/o sticky: {{ 'ok' if _filesystem_ww_n | int == 0 else 'FAIL (' ~ _filesystem_ww_n ~ ')' }}"
+      - "9.6 files without owner/group: {{ 'ok' if _filesystem_un_n | int == 0 else 'FAIL (' ~ _filesystem_un_n ~ ')' }}"
+      {% for r in _filesystem_sensitive.results %}
+      {% set ok = r.stat.exists and r.stat.mode == r.item.mode and r.stat.pw_name == r.item.owner and r.stat.gr_name == r.item.group %}
+      - "9.7 {{ r.item.path }} ({{ r.item.mode }} {{ r.item.owner }}:{{ r.item.group }}): {{ 'ok' if ok else 'FAIL' }}"
+      {% endfor %}

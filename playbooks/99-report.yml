@@ -1,0 +1,18 @@
+---
+# Play 4 - Report.
+#
+# Runs a compliance scan (Lynis) and writes a timestamped report locally under
+# reports/<host>_<date>/. See docs/architecture.md (section 3).
+- name: "Castellan | Play 4 - Report"
+  hosts: vps
+  gather_facts: false
+  become: true
+  vars:
+    ansible_user: "{{ admin_user }}"
+    # By this point the ssh role may have changed the port, so prefer ssh_port.
+    ansible_port: "{{ ssh_port | default(initial_port | default(22)) }}"
+
+  roles:
+    - role: compliance    # Lynis scan + hardening index + timestamped report
+      when: enable_compliance | default(true)
+      tags: [compliance, report]

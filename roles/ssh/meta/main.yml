@@ -1,0 +1,4 @@
+---
+# ssh writes a drop-in under /etc/ssh/sshd_config.d/ and reloads sshd via a
+# handler; it backs up sshd_config via backup_config inside apply.yml.
+dependencies: []

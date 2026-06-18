@@ -1,0 +1,4 @@
+---
+# accounts is consumed by the bootstrap play. It only creates new objects
+# (admin user, groups, sudoers drop-in), so it needs no pre-change backup.
+dependencies: []
