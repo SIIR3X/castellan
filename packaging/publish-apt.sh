@@ -51,4 +51,4 @@ gpg --export "${GPG_KEY_ID}" > castellan-archive-keyring.gpg
 gpg --armor --export "${GPG_KEY_ID}" > castellan-archive-keyring.asc
 
 echo "[+] apt repository refreshed in ${REPO}"
-ls -1 "${REPO}/pool"
+ls -1 pool   # already inside "${REPO}" after the cd above
