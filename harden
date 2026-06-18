@@ -57,8 +57,8 @@ Castellan - agentless Linux hardening, driven by Ansible.
 
 Usage:
   ./harden init      <host>             Interactive setup of a new host (wizard)
-  ./harden configure <host>             Pick profile + measures (roles -> checklist)
-  ./harden list                         List configured hosts, profile and measures
+  ./harden configure <host>             Edit an existing host's configuration
+  ./harden list                         List configured hosts
   ./harden audit     <target> [args...] Read-only compliance audit (no changes)
   ./harden apply     <target> [args...] Apply hardening
   ./harden rollback  <target> [args...] Restore the latest backup (or a specific
@@ -74,14 +74,16 @@ an inventory group, or 'all'. init always takes a single host. Examples:
   ./harden apply web1.example.net
   ./harden audit web1,web2,db1
   ./harden apply vps                    (all hosts in the 'vps' group)
-  ./harden apply all -e hardening_profile=paranoid
 
-Run only specific roles with --only (an alias for ansible-playbook --tags); the
-bootstrap + verify safety spine always runs first, so this is safe on any host:
+Castellan applies EVERY measure (no profiles). Run only specific roles with
+--only (an alias for ansible-playbook --tags); the bootstrap + verify safety
+spine always runs first, so this is safe on any host:
   ./harden apply web1 --only ssh,firewall
   ./harden audit vps  --only sysctl
 
-Any extra args after <target> are passed straight to ansible-playbook, e.g.
+Set CASTELLAN_RAW=1 to get Ansible's default verbose output (with diffs) instead
+of the live checklist. Any extra args after <target> pass straight to
+ansible-playbook, e.g.
   ./harden apply 203.0.113.42 --ask-pass --tags ssh
   ./harden apply vps --forks 10 --limit '!db1'
 EOF
@@ -195,6 +197,8 @@ cmd_report() {
 main() {
   local subcmd="${1:-help}"
   ensure_data_dir
+  # Honor CASTELLAN_RAW=1: fall back to Ansible's verbose yaml output + diffs.
+  [ -n "${CASTELLAN_RAW:-}" ] && export ANSIBLE_STDOUT_CALLBACK=yaml
   case "$subcmd" in
     init)
       require_host "${2:-}"; cmd_init "$2" ;;

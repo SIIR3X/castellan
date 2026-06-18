@@ -36,6 +36,12 @@ f2b_maxretry:  3
 f2b_bantime:   1h
 
 # --- Global ---
-hardening_profile: standard         # minimal | standard | paranoid
+# Castellan applies EVERY measure - there is no profile to pick. Flip an
+# enable_<role> off here only to deliberately skip one (see group_vars/all.yml).
 auto_reboot:       false
-# notify_email:    you@example.com
+
+# --- Optional measure parameters (inert until set) ---
+# notify_email:                you@example.com   # update/login alerts (else syslog)
+# audit_logging_syslog_target: 10.0.0.5:514      # forward logs to remote syslog
+# boot_grub_password_hash:     "grub.pbkdf2..."  # enables the GRUB password (15.1)
+# enable_mfa:                  true              # TOTP 2FA (needs enrollment)
