@@ -59,39 +59,40 @@
   when: ssh_remove_weak_host_keys | bool
   notify: "Ssh | Reload sshd"
 
-# --- 2.6 - change the listening port. On Ubuntu sshd is socket-activated, so
-# the port is owned by ssh.socket (not sshd_config); manage a socket drop-in.
-# Detection: service_facts does NOT list .socket units, so stat the unit file. ---
+# --- 2.6 - change the listening port. The port lives in sshd_config (Port). On
+# a socket-activated sshd (Ubuntu 24.04) the sshd-socket-generator reads that
+# Port and configures ssh.socket on the next daemon-reload; on a direct
+# sshd.service (Debian, older Ubuntu) sshd uses it as-is. Editing ssh.socket by
+# hand is wrong: a bare "ListenStream=<port>" binds IPv6-only and the generator
+# overrides any manual drop-in whenever sshd_config changes -> lockout.
+#
+# Detect whether ssh.socket exists so the handler only restarts it where present.
 - name: "Ssh | Detect the ssh.socket unit (2.6)"
   ansible.builtin.stat:
     path: /usr/lib/systemd/system/ssh.socket
   register: _ssh_socket_unit
   become: true
 
-# Only touch the socket when actually moving off the default port 22: this keeps
-# normal runs from churning ssh.socket, and a live port change is disruptive
-# (do it deliberately; reverting needs a connection on the new port).
-- name: "Ssh | Ensure the ssh.socket drop-in directory exists (2.6)"
+# Remove any legacy ssh.socket port drop-in from older Castellan versions; the
+# generator now owns the socket via sshd_config Port.
+- name: "Ssh | Remove the legacy ssh.socket port drop-in (2.6)"
   ansible.builtin.file:
-    path: /etc/systemd/system/ssh.socket.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    path: /etc/systemd/system/ssh.socket.d/10-castellan-port.conf
+    state: absent
   become: true
-  when:
-    - _ssh_socket_unit.stat.exists
-    - ssh_port | int != 22
+  notify: "Ssh | Apply ssh port change"
 
-- name: "Ssh | Set the listening port via ssh.socket (2.6)"
+# Only set Port when actually moving off the default 22: a live port change is
+# disruptive (do it deliberately; reverting needs a connection on the new port).
+# The new port is already open in ufw (firewall runs first), so no lockout.
+- name: "Ssh | Set the listening port via sshd_config (2.6)"
   ansible.builtin.template:
-    src: ssh-socket-port.conf.j2
-    dest: /etc/systemd/system/ssh.socket.d/10-castellan-port.conf
+    src: sshd-port.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-castellan-port.conf
     owner: root
     group: root
     mode: "0644"
+    validate: "/usr/sbin/sshd -t -f %s"
   become: true
-  when:
-    - _ssh_socket_unit.stat.exists
-    - ssh_port | int != 22
-  notify: "Ssh | Apply ssh.socket port change"
+  when: ssh_port | int != 22
+  notify: "Ssh | Apply ssh port change"

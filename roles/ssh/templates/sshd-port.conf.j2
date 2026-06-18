@@ -1,0 +1,6 @@
+# Managed by Castellan - SSH listening port (2.6). Do not edit by hand.
+# On Ubuntu 24.04 the sshd-socket-generator reads this Port and configures
+# ssh.socket on daemon-reload; on a direct sshd.service it is used as-is. The
+# address family (and thus IPv4/IPv6 bind) follows AddressFamily in the hardening
+# drop-in, so the generator binds the right protocol.
+Port {{ ssh_port }}
