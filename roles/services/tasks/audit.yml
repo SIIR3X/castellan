@@ -1,0 +1,101 @@
+---
+# services (audit) - read-only inventory mapped to section 10; no changes.
+
+- name: "Services | Read status of legacy network packages (10.1)"
+  ansible.builtin.command: "dpkg-query -W -f='${Package} ${Status}\n' {{ services_unwanted_packages | join(' ') }}"
+  register: _services_unwanted
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Services | Gather service facts (10.2)"
+  ansible.builtin.service_facts:
+  become: true
+
+- name: "Services | List listening sockets (10.3)"
+  ansible.builtin.command: ss -tulpnH
+  register: _services_ports
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Services | Check whether postfix is installed (10.4)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' postfix
+  register: _services_postfix
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Services | Read postfix listening interfaces (10.4)"
+  ansible.builtin.command: postconf -h inet_interfaces
+  register: _services_postfix_inet
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  when: "'install ok installed' in (_services_postfix.stdout | default(''))"
+
+- name: "Services | Read status of compilers/build tools (10.5)"
+  ansible.builtin.command: "dpkg-query -W -f='${Package} ${Status}\n' {{ services_compiler_packages | join(' ') }}"
+  register: _services_compilers
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Services | Read effective IPv6 disable state (10.6)"
+  ansible.builtin.command: sysctl -n net.ipv6.conf.all.disable_ipv6
+  register: _services_ipv6
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Services | Simulate orphaned-package cleanup (10.7)"
+  ansible.builtin.command: apt-get -s autoremove  # noqa: command-instead-of-module
+  register: _services_autoremove
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  environment:
+    LANG: C
+
+- name: "Services | Report section 10 compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        10.1 no legacy network packages installed:
+        {{ 'ok' if 'install ok installed' not in (_services_unwanted.stdout | default('')) else 'FAIL (some present)' }}
+      - >-
+        10.2 unused services not present/enabled:
+        {{ 'ok' if (_services_disable_present | length) == 0 else ('review: ' ~ (_services_disable_present | join(', '))) }}
+      - >-
+        10.4 postfix loopback-only:
+        {{ ('ok' if (_services_postfix_inet.stdout | default('') | trim) in ['loopback-only', 'localhost']
+            else 'FAIL')
+           if 'install ok installed' in (_services_postfix.stdout | default('')) else 'skipped (no postfix)' }}
+      - >-
+        10.5 compilers removed:
+        {{ ('ok' if 'install ok installed' not in (_services_compilers.stdout | default('')) else 'FAIL (some present)')
+           if services_remove_compilers else 'off' }}
+      - >-
+        10.6 IPv6 disabled:
+        {{ ('ok' if (_services_ipv6.stdout | default('0') | trim) == '1' else 'FAIL')
+           if services_disable_ipv6 else 'off' }}
+      - >-
+        10.7 no orphaned packages:
+        {{ 'ok' if ' 0 to remove' in (_services_autoremove.stdout | default('')) else 'review (autoremove has candidates)' }}
+      - "10.3 listening sockets (manual review):"
+  vars:
+    _services_disable_present: >-
+      {{ services_disable
+         | select('in', (ansible_facts.services.keys() | map('regex_replace', '\.service$', '') | list))
+         | list }}
+
+- name: "Services | Report listening sockets (10.3)"
+  ansible.builtin.debug:
+    msg: "{{ _services_ports.stdout_lines | default([]) }}"

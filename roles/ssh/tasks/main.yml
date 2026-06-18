@@ -1,0 +1,11 @@
+---
+# ssh - dispatch on castellan_mode (see docs/architecture.md section 4).
+# audit -> read-only checks on the effective sshd config; apply -> harden it.
+
+- name: "Ssh | Run audit checks"
+  ansible.builtin.include_tasks: audit.yml
+  when: castellan_mode | default('apply') == 'audit'
+
+- name: "Ssh | Apply remediation"
+  ansible.builtin.include_tasks: apply.yml
+  when: castellan_mode | default('apply') != 'audit'

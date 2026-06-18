@@ -1,0 +1,46 @@
+---
+# confinement (audit) - read-only checks mapped to section 8; no changes.
+
+- name: "Confinement | Read AppArmor status (8.1/8.2)"
+  ansible.builtin.command: aa-status --json
+  register: _confinement_aa
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Confinement | Read AppArmor service state (8.2)"
+  ansible.builtin.command: systemctl is-enabled apparmor  # noqa: command-instead-of-module
+  register: _confinement_aa_enabled
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Confinement | Resolve how each rare FS module would load (8.8)"
+  ansible.builtin.command: "modprobe -n -v {{ item }}"
+  register: _confinement_modprobe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop: "{{ confinement_blacklist_fs_modules }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Confinement | Report section 8 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _confinement_report | from_yaml }}
+  vars:
+    _confinement_complain_count: >-
+      {{ ((_confinement_aa.stdout | default('{}') | from_json).profiles | default({}))
+         | dict2items | selectattr('value', 'equalto', 'complain') | list | length }}
+    _confinement_report: |
+      - "8.1 AppArmor loaded: {{ 'ok' if 'profiles' in (_confinement_aa.stdout | default('')) else 'FAIL' }}"
+      - "8.1 profiles in complain mode: {{ _confinement_complain_count }} ({{ 'ok' if (_confinement_complain_count | int) == 0 else 'review' }})"
+      - "8.2 apparmor enabled at boot: {{ 'ok' if (_confinement_aa_enabled.stdout | default('') | trim) == 'enabled' else 'FAIL' }}"
+      {% for r in _confinement_modprobe.results %}
+      - "8.8 {{ r.item }} disabled: {{ 'ok' if '/bin/true' in (r.stdout | default('')) else 'FAIL' }}"
+      {% endfor %}
+      - "8.3/8.4 sandboxed units: {{ confinement_harden_units | length }}{{ ' (none configured)' if confinement_harden_units | length == 0 else '' }}"

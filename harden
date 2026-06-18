@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+#
+# Castellan - agentless Linux hardening, driven by Ansible.
+# Thin wrapper around ansible-playbook. See docs/ for the design.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Two layouts are supported transparently:
+#   - source checkout: program and data both live in the repo (unchanged).
+#   - installed (apt): program is read-only under /usr/share/castellan, while
+#     per-user data (host configs, reports, keys) lives under ~/.config/castellan.
+if [ -z "${CASTELLAN_PROG_DIR:-}" ] && [ -d "${SCRIPT_DIR}/playbooks" ] && [ -d "${SCRIPT_DIR}/lib" ] && [ "${SCRIPT_DIR#/usr/}" = "${SCRIPT_DIR}" ]; then
+  PROG_DIR="$SCRIPT_DIR"
+  DATA_DIR="$SCRIPT_DIR"
+  HOST_VARS_DIR="${PROG_DIR}/inventory/host_vars"
+  REPORTS_DIR="${PROG_DIR}/reports"
+  INVENTORY="${PROG_DIR}/inventory/castellan-inventory.sh"
+else
+  PROG_DIR="${CASTELLAN_PROG_DIR:-/usr/share/castellan}"
+  DATA_DIR="${CASTELLAN_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/castellan}"
+  HOST_VARS_DIR="${DATA_DIR}/host_vars"
+  REPORTS_DIR="${DATA_DIR}/reports"
+  INVENTORY="${DATA_DIR}/castellan-inventory.sh"
+fi
+REPO_ROOT="$PROG_DIR"   # back-compat for any internal reference
+PLAYBOOK="${PROG_DIR}/playbooks/site.yml"
+
+# Scaffold the per-user data directory on first use (installed mode only).
+ensure_data_dir() {
+  [ "$DATA_DIR" = "$PROG_DIR" ] && return 0
+  mkdir -p "${HOST_VARS_DIR}" "${REPORTS_DIR}" "${DATA_DIR}/public_keys"
+  [ -e "${DATA_DIR}/group_vars" ] || ln -s "${PROG_DIR}/inventory/group_vars" "${DATA_DIR}/group_vars"
+  [ -e "${INVENTORY}" ] || ln -s "${PROG_DIR}/inventory/castellan-inventory.sh" "${INVENTORY}"
+  export ANSIBLE_INVENTORY="${INVENTORY}"
+  export CASTELLAN_HOST_VARS="${HOST_VARS_DIR}"
+}
+
+# ---- output helpers --------------------------------------------------------
+if [ -t 1 ]; then
+  C_RED='\033[0;31m'; C_GRN='\033[0;32m'; C_YEL='\033[0;33m'; C_BLU='\033[0;34m'; C_RST='\033[0m'
+else
+  C_RED=''; C_GRN=''; C_YEL=''; C_BLU=''; C_RST=''
+fi
+info() { printf '%b\n' "${C_BLU}[*]${C_RST} $*"; }
+ok()   { printf '%b\n' "${C_GRN}[+]${C_RST} $*"; }
+warn() { printf '%b\n' "${C_YEL}[!]${C_RST} $*" >&2; }
+die()  { printf '%b\n' "${C_RED}[x]${C_RST} $*" >&2; exit 1; }
+
+# Interactive config library (wizard + measure selector + catalog).
+# shellcheck source=lib/castellan-config.sh
+[ -f "${REPO_ROOT}/lib/castellan-config.sh" ] && . "${REPO_ROOT}/lib/castellan-config.sh"
+
+usage() {
+  cat <<'EOF'
+Castellan - agentless Linux hardening, driven by Ansible.
+
+Usage:
+  ./harden init      <host>             Interactive setup of a new host (wizard)
+  ./harden configure <host>             Pick profile + measures (roles -> checklist)
+  ./harden list                         List configured hosts, profile and measures
+  ./harden audit     <target> [args...] Read-only compliance audit (no changes)
+  ./harden apply     <target> [args...] Apply hardening
+  ./harden rollback  <target> [args...] Restore the latest backup (or a specific
+                                        run via -e castellan_rollback_stamp=<dir>)
+  ./harden report    <target>           Show the latest report per host
+  ./harden help                         Show this help
+
+A host appears in the inventory automatically once ./harden init creates its
+config; no static inventory file needs editing.
+
+<target> is any Ansible host pattern - a single host, a comma-separated list,
+an inventory group, or 'all'. init always takes a single host. Examples:
+  ./harden apply web1.example.net
+  ./harden audit web1,web2,db1
+  ./harden apply vps                    (all hosts in the 'vps' group)
+  ./harden apply all -e hardening_profile=paranoid
+
+Run only specific roles with --only (an alias for ansible-playbook --tags); the
+bootstrap + verify safety spine always runs first, so this is safe on any host:
+  ./harden apply web1 --only ssh,firewall
+  ./harden audit vps  --only sysctl
+
+Any extra args after <target> are passed straight to ansible-playbook, e.g.
+  ./harden apply 203.0.113.42 --ask-pass --tags ssh
+  ./harden apply vps --forks 10 --limit '!db1'
+EOF
+}
+
+# ---- guards ----------------------------------------------------------------
+require_ansible() {
+  command -v ansible-playbook >/dev/null 2>&1 \
+    || die "ansible-playbook not found. Install Ansible on this control machine."
+}
+
+require_host() {
+  [ -n "${1:-}" ] || { usage; die "Missing <target> argument."; }
+}
+
+# Expand a target pattern (single host, comma-separated list, group, or 'all')
+# to the concrete hosts it matches in the inventory. Empty if nothing matches.
+resolve_hosts() {
+  ( cd "$REPO_ROOT" && ansible "$1" --list-hosts 2>/dev/null ) \
+    | sed '1d;s/^[[:space:]]*//' | grep -v '^[[:space:]]*$' || true
+}
+
+# Friendly, non-fatal check: warn for every matched host lacking a per-host
+# config. Works for a single host, a list, or a group.
+check_host_vars() {
+  local target="$1" hosts h
+  hosts="$(resolve_hosts "$target")"
+  if [ -z "$hosts" ]; then
+    warn "No hosts match '${target}' in the inventory (check inventory/hosts.yml)."
+    return
+  fi
+  while IFS= read -r h; do
+    [ -n "$h" ] || continue
+    if [ ! -f "${HOST_VARS_DIR}/${h}.yml" ]; then
+      warn "No config at inventory/host_vars/${h}.yml (create it with: ./harden init ${h})"
+    fi
+  done <<< "$hosts"
+}
+
+# ---- core ------------------------------------------------------------------
+# Translate the friendly `--only <roles>` into Ansible's `--tags <roles>` and
+# populate the REWRITTEN array with the resulting passthrough args. The safety
+# spine (bootstrap + verify) is tagged 'always', so --only never skips it.
+rewrite_only() {
+  REWRITTEN=()
+  local a
+  for a in "$@"; do
+    case "$a" in
+      --only)   REWRITTEN+=(--tags) ;;
+      --only=*) REWRITTEN+=("--tags=${a#--only=}") ;;
+      *)        REWRITTEN+=("$a") ;;
+    esac
+  done
+}
+
+run_playbook() {
+  # args: <target> <mode> [extra ansible-playbook args...]
+  # <target> is any Ansible pattern: a host, a comma-list, a group, or 'all'.
+  local target="$1" mode="$2"; shift 2
+  local -a cmd=(ansible-playbook "$PLAYBOOK" --limit "$target" --extra-vars "castellan_mode=${mode}")
+  [ "$mode" = "audit" ] && cmd+=(--check --diff)
+  # Installed mode: write fetched reports under the per-user data dir.
+  [ "$DATA_DIR" != "$PROG_DIR" ] && cmd+=(--extra-vars "compliance_report_dir=${REPORTS_DIR}")
+  info "Running: ${cmd[*]} $*"
+  ( cd "$PROG_DIR" && "${cmd[@]}" "$@" )
+}
+
+run_rollback() {
+  # args: <target> [extra ansible-playbook args...]
+  local target="$1"; shift
+  local -a cmd=(ansible-playbook "${REPO_ROOT}/playbooks/50-rollback.yml" --limit "$target")
+  info "Running: ${cmd[*]} $*"
+  ( cd "$REPO_ROOT" && "${cmd[@]}" "$@" )
+}
+
+cmd_init() {
+  local host="$1"
+  case "$host" in
+    *,*|all) die "init takes a single host, not a list or group ('${host}')." ;;
+  esac
+  command -v cc_wizard >/dev/null 2>&1 || die "lib/castellan-config.sh is missing."
+  cc_wizard "$host"
+}
+
+cmd_configure() {
+  local host="$1"
+  case "$host" in
+    *,*|all) die "configure takes a single host ('${host}')." ;;
+  esac
+  command -v cc_configure >/dev/null 2>&1 || die "lib/castellan-config.sh is missing."
+  cc_configure "$host"
+}
+
+cmd_report() {
+  local target="$1" hosts h latest
+  if command -v ansible >/dev/null 2>&1; then hosts="$(resolve_hosts "$target")"; fi
+  # Fall back to the raw target (split on commas) when Ansible cannot resolve it.
+  [ -n "${hosts:-}" ] || hosts="${target//,/$'\n'}"
+  while IFS= read -r h; do
+    [ -n "$h" ] || continue
+    latest="$(ls -1dt "${REPORTS_DIR}/${h}_"* 2>/dev/null | head -n1 || true)"
+    if [ -n "$latest" ]; then
+      ok "[${h}] Latest report: ${latest}"
+    else
+      warn "[${h}] No report yet."
+    fi
+  done <<< "$hosts"
+}
+
+# ---- dispatch --------------------------------------------------------------
+main() {
+  local subcmd="${1:-help}"
+  ensure_data_dir
+  case "$subcmd" in
+    init)
+      require_host "${2:-}"; cmd_init "$2" ;;
+    configure|config)
+      require_host "${2:-}"; cmd_configure "$2" ;;
+    list|ls)
+      cc_list ;;
+    audit)
+      require_ansible; require_host "${2:-}"
+      local host="$2"; shift 2
+      rewrite_only "$@"
+      check_host_vars "$host"; run_playbook "$host" audit ${REWRITTEN[@]+"${REWRITTEN[@]}"} ;;
+    apply)
+      require_ansible; require_host "${2:-}"
+      local host="$2"; shift 2
+      rewrite_only "$@"
+      check_host_vars "$host"; run_playbook "$host" apply ${REWRITTEN[@]+"${REWRITTEN[@]}"} ;;
+    rollback)
+      require_ansible; require_host "${2:-}"
+      local host="$2"; shift 2
+      rewrite_only "$@"
+      check_host_vars "$host"; run_rollback "$host" ${REWRITTEN[@]+"${REWRITTEN[@]}"} ;;
+    report)
+      require_host "${2:-}"; cmd_report "$2" ;;
+    help|-h|--help)
+      usage ;;
+    *)
+      usage; die "Unknown command: ${subcmd}" ;;
+  esac
+}
+
+main "$@"

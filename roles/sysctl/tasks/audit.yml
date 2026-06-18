@@ -1,0 +1,33 @@
+---
+# sysctl (audit) - read-only checks of the section 7 parameters. Reports
+# deviations mapped to docs/security-measures.md; never changes the host.
+
+- name: "Sysctl | Read current kernel parameters"
+  ansible.builtin.command: "sysctl -n {{ item.key }}"
+  register: _sysctl_read
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  loop: "{{ sysctl_settings + sysctl_extra_settings + _sysctl_optional }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    _sysctl_optional: >-
+      {{ ([{'id': '7.14', 'key': 'kernel.perf_event_paranoid', 'value': 3}] if sysctl_restrict_perf | bool else [])
+         + ([{'id': '8.5', 'key': 'kernel.unprivileged_userns_clone', 'value': 0}] if sysctl_disable_userns | bool else [])
+         + ([{'id': '7.18', 'key': 'kernel.modules_disabled', 'value': 1}] if sysctl_disable_module_load | bool else []) }}
+
+- name: "Sysctl | Report section 7 compliance"
+  ansible.builtin.debug:
+    msg: "{{ _sysctl_report }}"
+  vars:
+    _sysctl_report: >-
+      [
+      {% for r in _sysctl_read.results -%}
+      "{{ r.item.id }} {{ r.item.key }}:
+      {{ 'ok' if (r.stdout | default('') | trim) == (r.item.value | string)
+         else 'FAIL (is ' ~ (r.stdout | default('') | trim) ~ ', want ' ~ (r.item.value | string) ~ ')' }}"
+      {{- '' if loop.last else ',' }}
+      {% endfor -%}
+      ]

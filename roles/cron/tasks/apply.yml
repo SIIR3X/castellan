@@ -1,0 +1,109 @@
+---
+# cron (apply) - restrict cron/at access and tighten crontab perms (section 16).
+# System cron jobs run as root regardless of cron.allow, so whitelisting users
+# is safe. at is handled only when installed.
+
+- name: "Cron | Detect whether cron is installed"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' cron
+  register: _cron_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Cron | Detect whether at is installed"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' at
+  register: _cron_at_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Cron | Harden cron"
+  when: "'install ok installed' in (_cron_pkg.stdout | default(''))"
+  block:
+    - name: "Cron | Back up the cron allow file before changes"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/cron.allow
+
+    # --- 16.1 Restrict access to cron --------------------------------------
+    - name: "Cron | Whitelist cron users via cron.allow (16.1)"
+      ansible.builtin.template:
+        src: allow.j2
+        dest: /etc/cron.allow
+        owner: root
+        group: root
+        mode: "{{ cron_file_mode }}"
+      become: true
+      when: cron_restrict_access | bool
+
+    - name: "Cron | Remove cron.deny (allow-list takes precedence) (16.1)"
+      ansible.builtin.file:
+        path: /etc/cron.deny
+        state: absent
+      become: true
+      when: cron_restrict_access | bool
+
+    # --- 16.2 Permissions on crontab files/directories ---------------------
+    - name: "Cron | Set permissions on /etc/crontab (16.2)"
+      ansible.builtin.file:
+        path: /etc/crontab
+        owner: root
+        group: root
+        mode: "{{ cron_file_mode }}"
+        state: file
+      become: true
+
+    - name: "Cron | Set permissions on cron directories (16.2)"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        mode: "{{ cron_dir_mode }}"
+        state: directory
+      become: true
+      loop:
+        - /etc/cron.d
+        - /etc/cron.hourly
+        - /etc/cron.daily
+        - /etc/cron.weekly
+        - /etc/cron.monthly
+
+# --- 16.1 Restrict access to at (only when installed) ------------------------
+- name: "Cron | Harden at"
+  when:
+    - cron_restrict_access | bool
+    - "'install ok installed' in (_cron_at_pkg.stdout | default(''))"
+  block:
+    - name: "Cron | Back up the at allow file before changes"
+      ansible.builtin.include_role:
+        name: backup_config
+        tasks_from: file
+      vars:
+        backup_config_file: /etc/at.allow
+
+    - name: "Cron | Whitelist at users via at.allow (16.1)"
+      ansible.builtin.template:
+        src: allow.j2
+        dest: /etc/at.allow
+        owner: root
+        group: root
+        mode: "{{ cron_file_mode }}"
+      become: true
+
+    - name: "Cron | Remove at.deny (allow-list takes precedence) (16.1)"
+      ansible.builtin.file:
+        path: /etc/at.deny
+        state: absent
+      become: true
+
+# --- 16.4 Mask unnecessary systemd timers (opt-in) ---------------------------
+- name: "Cron | Mask unnecessary systemd timers (16.4)"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+    state: stopped
+  become: true
+  loop: "{{ cron_disable_timers }}"
+  failed_when: false

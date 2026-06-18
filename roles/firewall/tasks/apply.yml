@@ -1,0 +1,107 @@
+---
+# firewall (apply) - configure and enable ufw in a lockout-safe order.
+#
+# CRITICAL ORDER: the SSH port is allowed BEFORE ufw is enabled (4.3). Default
+# policies and enable come last, so a fresh connection can never be cut.
+
+- name: "Firewall | Ensure ufw is installed"
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: "Firewall | Back up ufw configuration before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/ufw/user.rules
+    - /etc/ufw/user6.rules
+    - /etc/ufw/ufw.conf
+    - /etc/default/ufw
+    - /etc/ufw/before.rules
+    - /etc/ufw/before6.rules
+
+- name: "Firewall | Keep IPv6 filtering consistent with IPv4 (4.8)"
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^IPV6='
+    line: "IPV6={{ 'yes' if ufw_ipv6 | bool else 'no' }}"
+    state: present
+  become: true
+
+# --- Anti-lockout: open SSH FIRST, before any default-deny / enable. ---
+- name: "Firewall | Allow the SSH port before enabling ufw (4.3/4.4/4.10)"
+  community.general.ufw:
+    rule: >-
+      {{ 'allow'
+         if (ufw_admin_source_ip is defined and ufw_admin_source_ip | length > 0)
+         else ('limit' if ufw_rate_limit_ssh | bool else 'allow') }}
+    port: "{{ ssh_port | string }}"
+    proto: tcp
+    from_ip: >-
+      {{ ufw_admin_source_ip
+         if (ufw_admin_source_ip is defined and ufw_admin_source_ip | length > 0)
+         else 'any' }}
+  become: true
+
+- name: "Firewall | Open additional service ports (4.5)"
+  community.general.ufw:
+    rule: allow
+    port: "{{ item | string }}"
+    proto: tcp
+  loop: "{{ ufw_allowed_ports | default([]) }}"
+  become: true
+
+- name: "Firewall | Enable firewall logging (4.6)"
+  community.general.ufw:
+    logging: "{{ ufw_logging }}"
+  become: true
+
+- name: "Firewall | Set default incoming policy (4.1)"
+  community.general.ufw:
+    direction: incoming
+    policy: "{{ ufw_default_incoming }}"
+  become: true
+
+- name: "Firewall | Set default outgoing policy (4.2)"
+  community.general.ufw:
+    direction: outgoing
+    policy: "{{ ufw_default_outgoing }}"
+  become: true
+
+- name: "Firewall | Enable ufw (SSH already allowed above)"
+  community.general.ufw:
+    state: enabled
+  become: true
+
+# 4.7 - kernel anti-spoofing (the before.rules INVALID drop is already default).
+# Templated file + a single reload via handler -> fully idempotent (the
+# ansible.posix.sysctl module reports spurious changes on some keys).
+- name: "Firewall | Deploy kernel anti-spoofing sysctls (4.7)"
+  ansible.builtin.template:
+    src: 60-castellan-firewall.conf.j2
+    dest: /etc/sysctl.d/60-castellan-firewall.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: ufw_antispoof | bool
+  notify: "Firewall | Reload sysctl"
+
+# --- 4.9 Drop ICMP echo-request (ping) ---------------------------------------
+- name: "Firewall | Drop ICMP echo-request in before.rules (4.9)"
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '^(-A ufw-before-input -p (?:icmp|ipv6-icmp) --icmp(?:v6)?-type echo-request -j )ACCEPT$'
+    replace: '\1DROP'
+  become: true
+  loop:
+    - /etc/ufw/before.rules
+    - /etc/ufw/before6.rules
+  when: ufw_block_icmp_echo | bool
+  notify: "Firewall | Reload ufw"

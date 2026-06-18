@@ -1,0 +1,14 @@
+# Castellan compliance report
+
+- Host: {{ inventory_hostname }}
+- Date (UTC): {{ compliance_stamp }}
+- Castellan mode: {{ castellan_mode | default('apply') }}
+- Lynis hardening index (18.1): **{{ compliance_hardening_index }}** (target > 85)
+
+## Critical services active (18.4)
+
+- ssh:      {{ ansible_facts.services['ssh.service'].state | default('unknown') }}
+- ufw:      {{ 'active' if ('Status: active' in (_compliance_ufw.stdout | default(''))) else 'inactive' }}
+- fail2ban: {{ ansible_facts.services['fail2ban.service'].state | default('unknown') }}
+
+Raw Lynis output in this folder: `lynis.log`, `lynis-report.dat`.

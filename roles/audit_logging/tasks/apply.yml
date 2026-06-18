@@ -1,0 +1,128 @@
+---
+# audit_logging (apply) - auditd, journald, rsyslog and time sync (section 11).
+# Low lockout risk (no SSH/auth path). New drop-ins are backed up so rollback
+# can remove them; services reload via handlers at the end of the play.
+
+- name: "Audit logging | Detect whether rsyslog is installed"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' rsyslog
+  register: _audit_logging_rsyslog_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Audit logging | Back up files before changes"
+  ansible.builtin.include_role:
+    name: backup_config
+    tasks_from: file
+  vars:
+    backup_config_file: "{{ item }}"
+  loop:
+    - /etc/audit/rules.d/castellan.rules
+    - /etc/systemd/journald.conf.d/99-castellan-journald.conf
+    - /etc/rsyslog.d/99-castellan-perms.conf
+    - /etc/rsyslog.d/99-castellan-remote.conf
+
+# --- 11.1 / 11.2 auditd -------------------------------------------------------
+- name: "Audit logging | Install auditd (11.1)"
+  ansible.builtin.apt:
+    name: auditd
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: audit_logging_auditd | bool
+
+- name: "Audit logging | Enable and start auditd (11.1)"
+  ansible.builtin.service:
+    name: auditd
+    state: started
+    enabled: true
+  become: true
+  when: audit_logging_auditd | bool
+
+- name: "Audit logging | Deploy CIS audit rules (11.2)"
+  ansible.builtin.template:
+    src: castellan.rules.j2
+    dest: /etc/audit/rules.d/castellan.rules
+    owner: root
+    group: root
+    mode: "0640"
+  become: true
+  when: audit_logging_auditd | bool
+  notify: "Audit logging | Load audit rules"
+
+# --- 11.4 / 11.5 journald -----------------------------------------------------
+- name: "Audit logging | Ensure journald drop-in directory exists"
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: "Audit logging | Configure persistent journald + size cap (11.4/11.5)"
+  ansible.builtin.template:
+    src: 99-castellan-journald.conf.j2
+    dest: /etc/systemd/journald.conf.d/99-castellan-journald.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: "Audit logging | Restart journald"
+
+# --- 11.7 restrictive permissions on new log files ---------------------------
+- name: "Audit logging | Restrict permissions on new rsyslog files (11.7)"
+  ansible.builtin.template:
+    src: 99-castellan-perms.conf.j2
+    dest: /etc/rsyslog.d/99-castellan-perms.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when:
+    - audit_logging_rsyslog_perms | bool
+    - "'install ok installed' in (_audit_logging_rsyslog_pkg.stdout | default(''))"
+  notify: "Audit logging | Restart rsyslog"
+
+# --- 11.6 forward logs to a remote syslog server (opt-in) --------------------
+- name: "Audit logging | Forward logs to a remote syslog server (11.6)"
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/99-castellan-remote.conf
+    content: |
+      # Managed by Castellan (11.6) - forward all logs to a remote collector.
+      *.* @@{{ audit_logging_syslog_target }}
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when:
+    - audit_logging_remote_syslog | bool
+    - audit_logging_syslog_target | length > 0
+    - "'install ok installed' in (_audit_logging_rsyslog_pkg.stdout | default(''))"
+  notify: "Audit logging | Restart rsyslog"
+
+# --- 11.9 reliable timestamps (time synchronisation) -------------------------
+- name: "Audit logging | Ensure time synchronisation service is running (11.9)"
+  ansible.builtin.service:
+    name: systemd-timesyncd
+    state: started
+    enabled: true
+  become: true
+  when: audit_logging_require_timesync | bool
+
+- name: "Audit logging | Read current NTP enablement (11.9)"
+  ansible.builtin.command: timedatectl show -p NTP --value
+  register: _audit_logging_ntp
+  changed_when: false
+  check_mode: false
+  become: true
+  when: audit_logging_require_timesync | bool
+
+- name: "Audit logging | Enable NTP time synchronisation (11.9)"
+  ansible.builtin.command: timedatectl set-ntp true
+  changed_when: true
+  become: true
+  when:
+    - audit_logging_require_timesync | bool
+    - (_audit_logging_ntp.stdout | default('') | trim) != 'yes'

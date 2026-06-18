@@ -1,0 +1,69 @@
+# Managed by Castellan - SSH hardening (sshd_config drop-in).
+# Named 00- so it is read before 50-cloud-init.conf; sshd uses the first
+# obtained value for each directive, so these win. Do not edit by hand.
+
+# 2.6 - NOTE: the listening port is intentionally NOT set here. On a
+# socket-activated sshd (Ubuntu) a Port/ListenAddress directive makes sshd try
+# to bind the port itself on reload, conflicting with the systemd socket and
+# killing sshd. The port is owned by ssh.socket (managed separately by the role).
+
+# 2.1 - key-based authentication only.
+PubkeyAuthentication yes
+PasswordAuthentication {{ ssh_password_auth }}
+
+# 2.17 - listen address family (any | inet | inet6).
+AddressFamily {{ ssh_address_family }}
+{% if ssh_banner %}
+
+# 2.14 - pre-authentication legal banner.
+Banner /etc/issue.net
+{% endif %}
+
+# 2.2 / 2.3 - no root login, no empty passwords.
+PermitRootLogin {{ ssh_permit_root }}
+PermitEmptyPasswords no
+
+# 2.4 - no keyboard-interactive / challenge-response. The mfa role (section 3)
+# flips this on when enable_mfa is true so TOTP can run over keyboard-interactive;
+# it is then made safe by AuthenticationMethods publickey,keyboard-interactive
+# (set by the mfa drop-in) so a code alone can never replace the key.
+KbdInteractiveAuthentication {{ 'yes' if (enable_mfa | default(false)) else 'no' }}
+
+# 2.5 - restrict access to specific groups.
+AllowGroups {{ ssh_allow_groups | join(' ') }}
+
+# 2.7 - limit attempts and sessions.
+MaxAuthTries {{ ssh_max_auth_tries }}
+MaxSessions {{ ssh_max_sessions }}
+LoginGraceTime {{ ssh_login_grace_time }}
+
+# 2.10 - disable rhosts and host-based auth.
+IgnoreRhosts yes
+HostbasedAuthentication no
+
+# 2.8 / 2.9 - disable X11 and forwarding.
+X11Forwarding {{ ssh_x11_forwarding }}
+AllowAgentForwarding {{ ssh_allow_agent_forwarding }}
+AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
+
+# 2.13 - drop dead sessions.
+ClientAliveInterval {{ ssh_client_alive_interval }}
+ClientAliveCountMax {{ ssh_client_alive_count_max }}
+
+# 2.15 / 2.16 / 2.20 - misc hardening.
+PermitUserEnvironment no
+StrictModes yes
+UseDNS {{ ssh_use_dns }}
+
+# 2.11 - strong crypto only (modern OpenSSH algorithms).
+KexAlgorithms sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com
+
+# 2.12 - strong host-key and user public-key algorithms only (no DSA/SHA-1).
+HostKeyAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com
+PubkeyAcceptedAlgorithms ssh-ed25519,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com{% if ssh_allow_fido2 %},sk-ssh-ed25519@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com{% endif %}
+
+# 2.18 - present only strong host keys (ed25519 + rsa); weak ones are removed.
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key

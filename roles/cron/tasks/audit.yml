@@ -1,0 +1,49 @@
+---
+# cron (audit) - read-only checks + scheduled-task inventory (section 16).
+
+- name: "Cron | Stat cron.allow and cron.deny (16.1)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _cron_allow
+  loop:
+    - /etc/cron.allow
+    - /etc/cron.deny
+  loop_control:
+    label: "{{ item }}"
+  become: true
+
+- name: "Cron | Stat /etc/crontab (16.2)"
+  ansible.builtin.stat:
+    path: /etc/crontab
+  register: _cron_crontab
+  become: true
+
+- name: "Cron | List scheduled tasks for review (16.3)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    echo "system cron.d: $(ls /etc/cron.d 2>/dev/null | grep -vc '^$')";
+    echo "user crontabs: $(ls /var/spool/cron/crontabs 2>/dev/null | wc -l)";
+    echo "active timers: $(systemctl list-timers --no-pager 2>/dev/null | grep -c '\.timer')"
+  args:
+    executable: /bin/bash
+  register: _cron_tasks
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Cron | Report section 16 compliance"
+  ansible.builtin.debug:
+    msg: >-
+      {{ _cron_report | from_yaml }}
+  vars:
+    _cron_allow_stat: "{{ _cron_allow.results[0].stat }}"
+    _cron_deny_stat: "{{ _cron_allow.results[1].stat }}"
+    _cron_report: |
+      - "16.1 cron.allow present: {{ 'ok' if _cron_allow_stat.exists else 'FAIL' }}"
+      - "16.1 cron.deny absent: {{ 'ok' if not _cron_deny_stat.exists else 'FAIL' }}"
+      - "16.2 /etc/crontab mode {{ cron_file_mode }}: {{ 'ok' if (_cron_crontab.stat.exists and _cron_crontab.stat.mode == cron_file_mode) else 'FAIL' }}"
+      {% for line in _cron_tasks.stdout_lines | default([]) %}
+      - "16.3 {{ line }}"
+      {% endfor %}
+      - "16.4 timers to mask: {{ cron_disable_timers | join(', ') if cron_disable_timers | length > 0 else 'off' }}"

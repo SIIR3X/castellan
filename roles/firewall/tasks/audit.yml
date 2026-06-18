@@ -1,0 +1,59 @@
+---
+# firewall (audit) - read-only ufw checks. Reports deviations mapped to
+# docs/security-measures.md section 4; never changes the host.
+
+- name: "Firewall | Check whether ufw is installed"
+  ansible.builtin.command: which ufw
+  register: _firewall_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Firewall | Read ufw status"
+  ansible.builtin.command: ufw status verbose
+  register: _firewall_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+  when: _firewall_installed.rc == 0
+
+- name: "Firewall | Read the anti-spoofing setting (4.7)"
+  ansible.builtin.command: sysctl -n net.ipv4.conf.all.rp_filter
+  register: _firewall_rpfilter
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Firewall | Read the ICMP echo-request handling (4.9)"
+  ansible.builtin.command: grep -E 'icmp.*echo-request' /etc/ufw/before.rules
+  register: _firewall_icmp
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
+- name: "Firewall | Report firewall compliance"
+  ansible.builtin.debug:
+    msg:
+      - >-
+        ufw installed:
+        {{ 'ok' if _firewall_installed.rc == 0 else 'FAIL' }}
+      - >-
+        ufw active:
+        {{ 'ok' if ('Status: active' in (_firewall_status.stdout | default(''))) else 'FAIL' }}
+      - >-
+        4.1 default deny incoming:
+        {{ 'ok' if ('deny (incoming)' in (_firewall_status.stdout | default(''))) else 'FAIL' }}
+      - >-
+        4.3 SSH port {{ ssh_port }} present in rules:
+        {{ 'ok' if ((ssh_port | string) in (_firewall_status.stdout | default(''))) else 'FAIL' }}
+      - >-
+        4.7 anti-spoofing (rp_filter):
+        {{ 'ok' if ((_firewall_rpfilter.stdout | default('0') | trim) == '1') else 'FAIL' }}
+      - >-
+        4.9 ICMP echo-request dropped:
+        {{ ('ok' if 'echo-request -j DROP' in (_firewall_icmp.stdout | default('')) else 'FAIL')
+           if ufw_block_icmp_echo else 'off' }}
