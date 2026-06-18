@@ -16,3 +16,21 @@
     - role: compliance    # Lynis scan + hardening index + timestamped report
       when: enable_compliance | default(true)
       tags: [compliance, report]
+
+  post_tasks:
+    # Anti-lockout cleanup: reaching this play means we reconnected on the NEW
+    # SSH port, so it is proven working. Only now is it safe to close the OLD
+    # port that the firewall kept open during the change. Apply mode only; a
+    # no-op when the port is unchanged or the firewall is disabled.
+    - name: "Report | Close the old SSH port now the new one is verified (4.3)"
+      community.general.ufw:
+        rule: "{{ 'limit' if ufw_rate_limit_ssh | bool else 'allow' }}"
+        port: "{{ initial_port | default(22) | string }}"
+        proto: tcp
+        delete: true
+      become: true
+      when:
+        - castellan_mode | default('apply') == 'apply'
+        - enable_firewall | default(true)
+        - (initial_port | default(22) | int) != (ssh_port | int)
+      tags: [firewall, report]

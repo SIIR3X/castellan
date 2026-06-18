@@ -16,7 +16,7 @@ Companion documents: [install.md](./install.md) (set up the control machine),
 | Anti-lockout | A strict play and role order, plus a reconnection check, guarantee access is never cut before the new access is proven. |
 | Idempotence | Running the playbook once or fifty times yields the same state, safely. |
 | Reversibility | Every modified file is backed up with a timestamp, and a rollback command restores it. |
-| Modularity | One security category equals one role, enabled or disabled independently or through a profile. |
+| Modularity | One security category equals one role; all run by default, each can be skipped independently with `enable_<role>=false`. |
 | Variable connection | The first contact supports root + password, root + key, or an existing sudo user, per host. |
 
 ## 2. Project layout
@@ -30,7 +30,7 @@ castellan/
   inventory/
     hosts.yml                  Static "vps" group (optional; init uses a dynamic inventory)
     castellan-inventory.sh     Dynamic inventory: lists hosts that have a config file
-    group_vars/all.yml         Global defaults, profiles and enable_<role> toggles
+    group_vars/all.yml         Global defaults, enable_<role> toggles, measure defaults
     host_vars.example.yml      Per-host template copied by "harden init"
     host_vars/<host>.yml       Per-host config (plaintext, no secrets)
 
@@ -43,7 +43,8 @@ castellan/
     50-rollback.yml            Standalone: restore files from a backup run
 
   roles/                       One role per category (see section 7)
-  lib/castellan-config.sh      Interactive wizard, measure selector and catalogue
+  lib/castellan-config.sh      Terminal init/configure wizard (host config only)
+  callback_plugins/castellan.py  Live per-role hardening checklist (stdout)
   files/public_keys/           Public keys to deploy
   reports/                     Generated reports (timestamped per host)
   packaging/                   .deb build and signed apt repository scripts
@@ -121,34 +122,30 @@ Audit messages map to the identifiers in
 
 ## 5. Centralized configuration
 
-Global defaults, the profile definitions and the per-role toggles live in
+Global defaults, the per-role toggles and every measure default live in
 `inventory/group_vars/all.yml`. Per-host files in `inventory/host_vars/<host>.yml`
 override them, and any value can be overridden for a single run with `-e`.
+
+There are **no profiles**: Castellan applies every measure. Each role runs by
+default; flip a toggle off only to deliberately skip one.
 
 | Block | Key variables |
 |-------|---------------|
 | Run mode | `castellan_mode` (set by the wrapper) |
-| Profile | `hardening_profile`: minimal / standard / paranoid |
-| Toggles | `enable_<role>` for each role, derived from the active profile |
+| Toggles | `enable_<role>` for each role - all `true`, except `enable_mfa` |
+| Measures | every opt-in measure is `true` (e.g. `services_disable_ipv6`, `network_egress_filter`); see `group_vars/all.yml` |
+| Optional params | `notify_email`, `audit_logging_syslog_target`, `boot_grub_password_hash` - inert until set |
 | Access | `sudo_mode` |
-| SSH | `ssh_port`, `ssh_allow_groups`, `ssh_permit_root`, `ssh_password_auth` |
+| SSH | `ssh_port`, `ssh_address_family`, `ssh_allow_groups`, `ssh_permit_root`, `ssh_password_auth` |
 | Firewall | `ufw_default_incoming`, `ufw_allowed_ports`, `ufw_rate_limit_ssh` |
 | Fail2ban | `f2b_maxretry`, `f2b_bantime`, `f2b_findtime`, `f2b_ignoreip` |
 | Updates | `auto_reboot`, `auto_reboot_time` |
 | Backups | `castellan_backup_dir` |
 
-Profiles select which roles run. The exact membership is defined in
-`group_vars/all.yml`:
-
-| Profile | Roles run |
-|---------|-----------|
-| minimal | accounts, ssh, firewall, fail2ban, updates, compliance |
-| standard | minimal plus sysctl, pam, audit_logging, services, network, filesystem, cron (the default) |
-| paranoid | standard plus confinement, integrity, boot |
-
-`mfa` belongs to no profile because it needs TOTP enrollment; enable it explicitly
-with `-e enable_mfa=true` or through the selector. An unknown profile name falls
-back to standard.
+`mfa` is the only role off by default (`enable_mfa: false`) because it needs
+per-user TOTP enrollment; enable it with `-e enable_mfa=true` or in the wizard.
+Measures requiring an external value (remote syslog target, GRUB password hash,
+alert email) stay inert until that value is provided.
 
 ## 6. Connection per host
 
@@ -168,26 +165,29 @@ Every role pairs an audit path with an apply path and maps to a section of
 [security-measures.md](./security-measures.md). `backup_config` is cross-cutting:
 it runs in bootstrap and powers rollback.
 
-| Role | Section | Lockout risk | Profile |
+All roles run by default (`mfa` excepted). The order below is the lockout-safe
+apply order, not a priority.
+
+| Role | Section | Lockout risk | Default |
 |------|---------|--------------|---------|
 | backup_config | 17 (cross-cutting) | - | always |
-| accounts | 1 | medium | minimal |
-| ssh | 2 | high | minimal |
-| firewall | 4 | high | minimal |
-| fail2ban | 5 | medium | minimal |
-| updates | 6 | - | minimal |
-| compliance | 18 | - | minimal |
-| sysctl | 7 | low | standard |
-| pam | 13 | medium | standard |
-| audit_logging | 11 | - | standard |
-| services | 10 | medium | standard |
-| network | 14 | low | standard |
-| filesystem | 9 | low | standard |
-| cron | 16 | - | standard |
-| confinement | 8 | low | paranoid |
-| integrity | 12 | - | paranoid |
-| boot | 15 | low | paranoid |
-| mfa | 3 | medium | opt-in only |
+| accounts | 1 | medium | on |
+| ssh | 2 | high | on |
+| firewall | 4 | high | on |
+| fail2ban | 5 | medium | on |
+| updates | 6 | - | on |
+| compliance | 18 | - | on |
+| sysctl | 7 | low | on |
+| pam | 13 | medium | on |
+| audit_logging | 11 | - | on |
+| services | 10 | medium | on |
+| network | 14 | low | on |
+| filesystem | 9 | low | on |
+| cron | 16 | - | on |
+| confinement | 8 | low | on |
+| integrity | 12 | - | on |
+| boot | 15 | low | on |
+| mfa | 3 | medium | off (needs TOTP enrollment) |
 
 ## 8. Backup and rollback
 
@@ -221,8 +221,8 @@ A thin layer over `ansible-playbook` that keeps day-to-day use trivial.
 | Command | Action |
 |---------|--------|
 | `init <host>` | Interactive wizard; writes the host config |
-| `configure <host>` | Pick the profile and tick individual measures |
-| `list` | Configured hosts, their profile and measures |
+| `configure <host>` | Edit an existing host's config (replays the wizard) |
+| `list` | Configured hosts (target, connection, SSH port) |
 | `audit <host>` | Read-only audit, reports deviations |
 | `apply <host>` | Full hardening with the anti-lockout spine |
 | `rollback <host>` | Restore the latest backup |
@@ -252,6 +252,6 @@ directory.
 
 | Side | Prerequisites |
 |------|---------------|
-| Control machine | Ansible core 2.16+, OpenSSH client, Python 3; `sshpass` only if using initial password auth; `whiptail` optional for the menus |
+| Control machine | Ansible core 2.16+, OpenSSH client, Python 3; `sshpass` only if using initial password auth |
 | Target | Python 3 (present by default on Ubuntu/Debian); initial SSH access from the host |
 | Collections | `ansible.posix`, `community.general` (ufw, sysctl, pamd and related modules) |

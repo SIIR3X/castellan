@@ -49,6 +49,18 @@
          else 'any' }}
   become: true
 
+# Anti-lockout: when the SSH port is being changed, keep the OLD (initial) port
+# open too, so a fresh connection survives if the in-band port migration fails.
+# The report play (99-report.yml) closes it again only after it has successfully
+# reconnected on the NEW port (verify before cutting).
+- name: "Firewall | Keep the old SSH port open during the port change (4.3)"
+  community.general.ufw:
+    rule: "{{ 'limit' if ufw_rate_limit_ssh | bool else 'allow' }}"
+    port: "{{ initial_port | default(22) | string }}"
+    proto: tcp
+  become: true
+  when: (initial_port | default(22) | int) != (ssh_port | int)
+
 - name: "Firewall | Open additional service ports (4.5)"
   community.general.ufw:
     rule: allow

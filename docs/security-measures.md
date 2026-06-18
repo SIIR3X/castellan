@@ -319,29 +319,30 @@ On a VPS the console is managed by the host, so most of these are optional.
 
 ## Module summary
 
-Each module pairs an audit path with an apply path. The profile column shows the
-lowest profile that runs the role; see [architecture.md](./architecture.md) for the
-exact profile definitions.
+Each module pairs an audit path with an apply path. Castellan runs every module
+by default; the CRIT/IMP/REC/OPT labels on individual measures above indicate
+importance, not whether they run. `mfa` is the only module off by default (it
+needs per-user TOTP enrollment).
 
-| Module | Category | Lockout risk | Profile |
+| Module | Category | Lockout risk | Default |
 |--------|----------|--------------|---------|
-| accounts | Accounts and auth | medium | minimal |
-| ssh | SSH | high | minimal |
-| firewall | ufw | high | minimal |
-| fail2ban | Anti-bruteforce | medium (self-ban) | minimal |
-| updates | Patch management | - | minimal |
-| compliance | Lynis and reporting | - | minimal |
-| sysctl | Kernel | low | standard |
-| pam | Passwords | medium | standard |
-| audit_logging | auditd and logs | - | standard |
-| services | Minimization | medium | standard |
-| network | Network and NTP | low | standard |
-| filesystem | FS and mounts | low | standard |
-| cron | Scheduled tasks | - | standard |
-| confinement | AppArmor and systemd | low | paranoid |
-| integrity | AIDE and debsums | - | paranoid |
-| boot | GRUB | low | paranoid |
-| mfa | MFA / 2FA | medium | opt-in only |
+| accounts | Accounts and auth | medium | on |
+| ssh | SSH | high | on |
+| firewall | ufw | high | on |
+| fail2ban | Anti-bruteforce | medium (self-ban) | on |
+| updates | Patch management | - | on |
+| compliance | Lynis and reporting | - | on |
+| sysctl | Kernel | low | on |
+| pam | Passwords | medium | on |
+| audit_logging | auditd and logs | - | on |
+| services | Minimization | medium | on |
+| network | Network and NTP | low | on |
+| filesystem | FS and mounts | low | on |
+| cron | Scheduled tasks | - | on |
+| confinement | AppArmor and systemd | low | on |
+| integrity | AIDE and debsums | - | on |
+| boot | GRUB | low | on |
+| mfa | MFA / 2FA | medium | off (needs TOTP enrollment) |
 | backup_config | Backups | - | always |
 
 ## On "100% secure"
