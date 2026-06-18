@@ -14,15 +14,22 @@ set -euo pipefail
 HV="${CASTELLAN_HOST_VARS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/host_vars}"
 
 emit_list() {
-  local out="" first=1 f b
+  local out="" meta="" first=1 f b ip
   if [ -d "$HV" ]; then
     for f in "$HV"/*.yml; do
       [ -e "$f" ] || continue
       b="$(basename "$f" .yml)"
       if [ "$first" -eq 1 ]; then out="\"$b\""; first=0; else out="${out}, \"$b\""; fi
+      # Map target_ip -> ansible_host so the connection address is the IP/FQDN
+      # from host_vars, not the inventory name (which need not resolve).
+      ip="$(sed -n 's/^target_ip:[[:space:]]*//p' "$f" | head -n1 | tr -d '[:space:]\r')"
+      if [ -n "$ip" ]; then
+        [ -n "$meta" ] && meta="${meta}, "
+        meta="${meta}\"$b\": {\"ansible_host\": \"$ip\"}"
+      fi
     done
   fi
-  printf '{"vps": {"hosts": [%s]}, "_meta": {"hostvars": {}}}\n' "$out"
+  printf '{"vps": {"hosts": [%s]}, "_meta": {"hostvars": {%s}}}\n' "$out" "$meta"
 }
 
 case "${1:---list}" in
