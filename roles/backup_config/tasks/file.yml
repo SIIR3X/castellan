@@ -17,7 +17,7 @@
 
 - name: "Backup config | Resolve the run backup directory"
   ansible.builtin.set_fact:
-    _backup_config_run_dir: "{{ castellan_backup_dir }}/{{ castellan_backup_stamp | default('manual') }}"
+    _backup_config_run_dir: "{{ castellan_backup_dir }}/{{ backup_config_stamp | default('manual') }}"
 
 - name: "Backup config | Ensure the run backup directory exists"
   ansible.builtin.file:
@@ -31,13 +31,13 @@
 - name: "Backup config | Stat {{ backup_config_file }}"
   ansible.builtin.stat:
     path: "{{ backup_config_file }}"
-  register: _castellan_backup_stat
+  register: _backup_config_stat
   become: true
 
 - name: "Backup config | Record the manifest entry for {{ backup_config_file }}"
   ansible.builtin.lineinfile:
     path: "{{ _backup_config_run_dir }}/MANIFEST"
-    line: "{{ backup_config_file }}|{{ _castellan_backup_stat.stat.exists }}"
+    line: "{{ backup_config_file }}|{{ _backup_config_stat.stat.exists }}"
     create: true
     owner: root
     group: root
@@ -52,7 +52,7 @@
     group: root
     mode: "0700"
   become: true
-  when: _castellan_backup_stat.stat.exists
+  when: _backup_config_stat.stat.exists
 
 - name: "Backup config | Back up {{ backup_config_file }}"
   ansible.builtin.copy:
@@ -61,4 +61,4 @@
     remote_src: true
     mode: preserve
   become: true
-  when: _castellan_backup_stat.stat.exists
+  when: _backup_config_stat.stat.exists

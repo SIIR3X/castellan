@@ -91,8 +91,12 @@ enable_compliance:    "{{ 'compliance' in castellan_active_roles }}"
 # ---------------------------------------------------------------------------
 # Sensible defaults (overridable per host).
 # ---------------------------------------------------------------------------
-# Access
-sudo_mode: nopasswd
+# Access (admin_user / admin_pubkey_file are normally set per host in host_vars)
+admin_user:         ""
+admin_pubkey_file:  ""
+admin_shell:        /bin/bash
+admin_extra_groups: []
+sudo_mode:          nopasswd
 
 # SSH
 ssh_port:          22
@@ -105,12 +109,19 @@ ufw_default_incoming: deny
 ufw_default_outgoing: allow
 ufw_allowed_ports:    []
 ufw_rate_limit_ssh:   true
+ufw_logging:          "on"
+ufw_ipv6:             true
+ufw_block_icmp_echo:  false
+ufw_antispoof:        true
 
 # Fail2ban
-f2b_ignoreip: []
-f2b_maxretry: 3
-f2b_bantime:  1h
-f2b_findtime: 10m
+f2b_ignoreip:          []
+f2b_maxretry:          3
+f2b_bantime:           1h
+f2b_findtime:          10m
+f2b_bantime_increment: true
+f2b_backend:           systemd
+f2b_banaction:         ufw
 
 # Updates
 auto_reboot:      false
