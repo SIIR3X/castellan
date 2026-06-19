@@ -23,6 +23,11 @@ Semantic Versioning (https://semver.org).
 - SSH listening port is now set via `sshd_config` rather than a manual
   `ssh.socket` drop-in, fixing the port change on Ubuntu 24.04 (socket
   generator).
+- Re-running `audit` / `apply` against an already-hardened host no longer fails:
+  a new preflight play (Play 0) detects that the initial account is locked out
+  and connects as the existing admin instead. On a fresh host it still uses the
+  initial credentials. The live dashboard no longer shows the tolerated identity
+  probe as a `[FAIL]`.
 
 ### Removed
 

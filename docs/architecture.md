@@ -35,7 +35,8 @@ castellan/
     host_vars/<host>.yml       Per-host config (plaintext, no secrets)
 
   playbooks/
-    site.yml                   Imports the four plays in anti-lockout order
+    site.yml                   Imports the plays in anti-lockout order
+    00-preflight.yml           Play 0: detect the working SSH identity
     00-bootstrap.yml           Play 1: create the admin user and deploy its key
     01-verify-access.yml       Play 2: reconnect as the admin, assert sudo
     10-harden.yml              Play 3: apply the roles in lockout-safe order
@@ -68,10 +69,17 @@ roles/<name>/
 
 ## 3. Execution flow (anti-lockout orchestration)
 
-`site.yml` chains four plays. The sequencing is the heart of the safety design.
+`site.yml` chains the plays below. The sequencing is the heart of the safety
+design.
 
 ```
-Play 1  BOOTSTRAP        connection: INITIAL credentials
+Play 0  PREFLIGHT        connection: read-only probe
+  - Probe whether the admin is already reachable (host previously hardened)
+  - Choose the connection identity for the run: the initial credentials on a
+    fresh host, or the existing admin when re-running an already-hardened host
+    (where the initial account is now locked out). Never changes anything.
+
+Play 1  BOOTSTRAP        connection: INITIAL credentials (or admin on a re-run)
   - Back up the files that later plays will modify (backup_config)
   - Create the admin user, its group and sudoers drop-in
   - Deploy the admin SSH public key
@@ -85,7 +93,7 @@ Play 2  VERIFY ACCESS    connection: NEW admin + key
 Play 3  HARDEN           connection: NEW admin + sudo
   - firewall   open the SSH port BEFORE enabling ufw
   - fail2ban   ignoreip set so you cannot self-ban
-  - ssh        no root, no password, modern crypto, port via ssh.socket
+  - ssh        no root, no password, modern crypto, port via sshd_config
   - then sysctl, pam, audit_logging, services, network, filesystem, cron,
     updates, and the opt-in roles (confinement, integrity, boot, mfa)
   - flush handlers: reload sshd ONCE, at the very end
