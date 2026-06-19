@@ -245,6 +245,13 @@ class CallbackModule(CallbackBase):
         self._finish('SKIP')
 
     def v2_runner_on_unreachable(self, result):
+        # A probe that explicitly tolerates unreachability (ignore_unreachable,
+        # e.g. the Play 0 identity probe on a fresh host) is not a real failure:
+        # drop its transient line like any other housekeeping action.
+        if getattr(result._task, 'ignore_unreachable', False):
+            self._pending = None
+            self._clear()
+            return
         if self._pending is None:
             self._pending = ('action', '', 'host unreachable')
         kind, code, label = self._pending

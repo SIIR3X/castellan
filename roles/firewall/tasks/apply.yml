@@ -85,11 +85,23 @@
     direction: outgoing
     policy: "{{ ufw_default_outgoing }}"
   become: true
+  # When egress filtering is on, the network role owns the outgoing policy: it
+  # sets default-deny AFTER allowing the required outbound ports, so apt/DNS
+  # keep working during this play. Setting 'allow' here would fight that role
+  # and make every re-run report a change (non-idempotent).
+  when: not (network_egress_filter | default(false) | bool)
 
 - name: "Firewall | Enable ufw (SSH already allowed above)"
   community.general.ufw:
     state: enabled
   become: true
+
+# Enabling ufw resets netfilter and can drop the persistent SSH control socket,
+# so the first task of the next role intermittently fails with "Data could not
+# be sent to remote host". Force a clean reconnection here (we are already past
+# the SSH allow rule, so the new session is accepted).
+- name: "Firewall | Reset the SSH connection after enabling ufw"
+  ansible.builtin.meta: reset_connection
 
 # 4.7 - kernel anti-spoofing (the before.rules INVALID drop is already default).
 # Templated file + a single reload via handler -> fully idempotent (the

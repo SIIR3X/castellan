@@ -49,8 +49,10 @@ FAILED=0
 decolor() { sed -r 's/\x1b\[[0-9;]*m//g' "$1"; }
 
 # Pull a numeric field (ok/changed/failed/unreachable) off the VM's recap line.
+# Matches both the castellan dashboard recap ("  OK   192.168.1.43   ok=..")
+# and Ansible's native PLAY RECAP ("192.168.1.43 : ok=..", used in raw mode).
 recap_field() { # <logfile> <field>
-  decolor "$1" | grep -E "^${HOST}[[:space:]]*:" | tail -1 \
+  decolor "$1" | grep -E "${HOST//./\\.}[[:space:]].*ok=[0-9]+" | tail -1 \
     | grep -oE "$2=[0-9]+" | head -1 | cut -d= -f2
 }
 
@@ -101,7 +103,10 @@ f="$(recap_field "${LOGDIR}/2-apply.log" failed)"; u="$(recap_field "${LOGDIR}/2
 [ "${f:-x}" = 0 ] && [ "${u:-x}" = 0 ] \
   && pass "apply: failed=0 unreachable=0" \
   || fail "apply: failed=${f:-?} unreachable=${u:-?} (want 0/0)"
-if decolor "${LOGDIR}/2-apply.log" | grep -qE 'PLAY \[Castellan \| Play 4 - Report\]'; then
+# Play 4 reached = no mid-pipeline lockout. Match the castellan dashboard banner
+# ("==== REPORT ..."); also accept Ansible's native play header (raw mode).
+if decolor "${LOGDIR}/2-apply.log" \
+     | grep -qE '==== REPORT|PLAY \[Castellan \| Play 4 - Report\]'; then
   pass "apply: Play 4 (Report) reached -> no mid-pipeline lockout"
 else
   fail "apply: Play 4 (Report) NOT reached -> possible lockout before the end"
@@ -119,15 +124,25 @@ else
   decolor "${LOGDIR}/3-audit.log" | grep -w 'FAIL' | sed 's/^/      /' >&2
 fi
 
-# 4. Re-apply: must be idempotent (no config drift).
-step "4. Re-apply (idempotent)"
-run_mode "${LOGDIR}/4-reapply.log" apply
-f="$(recap_field "${LOGDIR}/4-reapply.log" failed)"; c="$(recap_field "${LOGDIR}/4-reapply.log" changed)"
+# 4. Re-apply: the hardening must be idempotent (no config drift on the target).
+# Two things change every run BY DESIGN and are not drift: backup_config writes a
+# fresh timestamped backup set, and the compliance play regenerates the Lynis
+# report and the applied-state record. Both are housekeeping, so they are
+# excluded; every other role must report zero changed tasks. Run in raw mode so
+# the per-task role names are visible for the filter.
+step "4. Re-apply (idempotent hardening)"
+CASTELLAN_RAW=1 run_mode "${LOGDIR}/4-reapply.log" apply
+f="$(recap_field "${LOGDIR}/4-reapply.log" failed)"
 [ "${f:-x}" = 0 ] || fail "re-apply: failed=${f:-?} (want 0)"
-if [ "${c:-x}" = 0 ]; then pass "re-apply: changed=0 (idempotent)"
+drift="$(decolor "${LOGDIR}/4-reapply.log" \
+  | awk '/^TASK \[/{t=$0} /^changed: \[/{print t}' \
+  | grep -vE 'backup_config|compliance' || true)"
+ndrift="$(printf '%s' "${drift}" | grep -c . || true)"
+if [ "${ndrift}" -eq 0 ]; then
+  pass "re-apply: no hardening drift (backups/report excluded)"
 else
-  fail "re-apply: changed=${c:-?} (config drift - not idempotent)"
-  decolor "${LOGDIR}/4-reapply.log" | grep -E '^changed: ' | sed 's/^/      /' >&2
+  fail "re-apply: ${ndrift} changed task(s) - config drift"
+  printf '%s\n' "${drift}" | sed 's/^/      /' >&2
 fi
 
 # 5. Effectiveness checks: all green.
