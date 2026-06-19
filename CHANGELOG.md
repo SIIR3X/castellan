@@ -4,9 +4,32 @@ All notable changes to Castellan are documented here. The format follows
 Keep a Changelog (https://keepachangelog.com), and the project aims to follow
 Semantic Versioning (https://semver.org).
 
-## [Unreleased]
+## [1.1.0] - Unreleased
 
-Nothing yet.
+### Changed
+
+- Castellan now applies **every** measure: hardening profiles
+  (minimal / standard / paranoid) are gone. To skip a measure or role, set its
+  toggle off per host (`enable_<role>: false`) or per run (`-e enable_<role>=false`
+  / `--only`); `mfa` remains the only measure off by default.
+- The `init` / `configure` wizard is now a plain terminal questionnaire with no
+  `whiptail` (or other TUI) dependency; it collects host configuration only and
+  no longer offers a per-measure selector.
+- Live per-role hardening checklist during `audit` / `apply` (Castellan stdout
+  callback plugin); set `CASTELLAN_RAW=1` for Ansible's default output.
+
+### Fixed
+
+- SSH listening port is now set via `sshd_config` rather than a manual
+  `ssh.socket` drop-in, fixing the port change on Ubuntu 24.04 (socket
+  generator).
+
+### Removed
+
+- `whiptail` recommendation from the `.deb` package metadata (the wizard no
+  longer uses it).
+
+## [1.0.0] - 2026-06-18
 
 ## [1.0.0] - 2026-06-18
 
