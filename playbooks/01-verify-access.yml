@@ -13,10 +13,12 @@
   hosts: vps
   gather_facts: false
   vars:
-    # New admin account. The port is still the initial one: the ssh role only
-    # changes it later, in Play 3.
+    # New admin account. On a first apply the ssh role has not changed the port
+    # yet, so this is still the initial port; on a re-run against an already
+    # hardened host Play 0 reports the hardened port. Falls back to the initial
+    # port when preflight did not run.
     ansible_user: "{{ admin_user }}"
-    ansible_port: "{{ initial_port | default(22) }}"
+    ansible_port: "{{ castellan_verify_port | default(initial_port | default(22)) }}"
 
   tasks:
     # Tagged 'always' so the access safety net runs even on a targeted
