@@ -38,9 +38,9 @@ Two principles drive the design:
   deviations without changing anything, and an apply path that remediates them.
   A post-run Lynis scan gives you a measurable hardening index.
 
-Hardening is selected with **profiles** (`minimal`, `standard`, `paranoid`) and
-fine-tuned per host with an interactive selector - no manual file editing
-required.
+Castellan applies **every** measure - there is no profile to pick. An
+interactive selector lets you turn a specific role or measure off per host,
+with no manual file editing required.
 
 ### What it hardens
 
@@ -74,8 +74,8 @@ the configuration model are described in
 - Linux/macOS with **Ansible core 2.16+** and **Python 3**
 - An SSH key loaded in your `ssh-agent` (Castellan never reads or copies private
   keys)
-- `whiptail` is used for the interactive menus when present; otherwise a plain
-  text prompt fallback is used (no install required)
+- No extra tooling: the setup wizard and selector are plain terminal prompts
+  (no whiptail or other TUI dependency)
 
 **Target server:**
 
@@ -136,31 +136,21 @@ castellan init srv-01
 
 The wizard asks for the initial connection (root + password, root + key, or an
 existing sudo user), the admin user to create, the public key to deploy, the
-hardening profile and the ports, then writes the host's config. The host is then
-known automatically (dynamic inventory).
+ports and any optional parameters (alert email, syslog target, GRUB hash, MFA),
+then writes the host's config. The host is then known automatically (dynamic
+inventory). Every measure is applied - there is nothing else to pick.
 
-### 2. Choose what to harden (profile + measures)
+### 2. Reconfigure a host
 
 ```bash
 castellan configure srv-01
 ```
 
-A menu lists every role; open a role to tick individual measures, or tick the
-whole role at once. The selection is saved back to the host's config. Where
-`whiptail` is unavailable, a plain text menu is used instead.
-
-```
-Configure srv-01                         Profile: standard
-  Profile .......... standard
-  ssh .............. 1/3 extra
-  firewall ......... 0/1 extra
-  ...
-
-  ssh - measures
-  [*]  >> WHOLE ROLE (every measure)
-  [*]  2.14  Pre-auth legal banner
-  [ ]  3.2   Accept FIDO2/U2F security keys
-```
+Replays the same plain-terminal questionnaire with the host's current values as
+defaults, and saves the result back to its config. To deliberately skip a
+measure or whole role, set its toggle off (`-e enable_<role>=false`) or run only
+the roles you want with `--only` (see below) - Castellan otherwise applies
+every measure.
 
 ### 3. Audit, then apply
 
@@ -176,19 +166,19 @@ the host and runs a Lynis scan.
 ### Inspect, report, roll back
 
 ```bash
-castellan list                       # configured hosts, their profile and measures
+castellan list                       # configured hosts (target, connection, SSH port)
 castellan report   srv-01            # path to the latest report (Lynis index)
 castellan rollback srv-01            # restore the latest backup
 ```
 
-### Profiles, targets and selective runs
+### Targets and selective runs
 
 ```bash
-# Pick a profile per run (or set it per host in the wizard / configure):
-castellan apply srv-01 -e hardening_profile=paranoid
-
-# Enable a measure / opt-in role for a single run:
+# Enable an opt-in measure / role for a single run (off by default):
 castellan apply srv-01 -e enable_mfa=true
+
+# Skip a specific measure / role for a single run:
+castellan apply srv-01 -e enable_confinement=false
 
 # Multiple targets: a comma-list, an inventory group, or all hosts:
 castellan apply web1,web2,db1
@@ -204,16 +194,10 @@ Any extra argument after the target is passed straight to `ansible-playbook`
 
 > **Tip:** `castellan help` prints the full command reference.
 
-### Hardening profiles
-
-| Profile | Roles run |
-|---------|-----------|
-| `minimal` | the lockout-critical spine + security updates + reporting |
-| `standard` | `minimal` + all low-risk hardening roles (**default**) |
-| `paranoid` | `standard` + the opt-in roles (confinement, integrity, boot) |
-
-`mfa` is never enabled by a profile (it needs TOTP enrollment); turn it on with
-`-e enable_mfa=true` or in the selector.
+Castellan applies **every** measure - there are no profiles. The bootstrap and
+access-verification spine always runs first, so `--only` is safe on any host.
+`mfa` is the sole measure off by default (it needs per-user TOTP enrollment);
+turn it on with `-e enable_mfa=true`.
 
 ## Documentation
 
