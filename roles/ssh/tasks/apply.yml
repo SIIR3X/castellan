@@ -18,12 +18,15 @@
 
 - name: "Ssh | Write the pre-auth banner (2.14)"
   ansible.builtin.copy:
-    dest: /etc/issue.net
+    dest: "{{ item }}"
     content: "{{ ssh_banner_text }}"
     owner: root
     group: root
     mode: "0644"
   become: true
+  loop:
+    - /etc/issue.net   # shown by sshd over the network (Banner directive)
+    - /etc/issue       # shown at the local console login prompt
   when: ssh_banner | bool
 
 - name: "Ssh | Deploy the hardening drop-in (validated)"

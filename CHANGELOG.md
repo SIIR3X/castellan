@@ -8,11 +8,12 @@ Semantic Versioning (https://semver.org).
 
 ### Added
 
-- Six extra hardening measures, on by default with individual toggles, that lift
-  the Lynis hardening index: disable core dumps (1.15), stronger password hashing
-  cost in `login.defs` (1.16), verbose SSH logging and no TCPKeepAlive (2.21/2.22),
-  patch-management visibility via apt-show-versions (6.9), and process/system
-  accounting with acct + sysstat (11.11).
+- Extra hardening measures, on by default with individual toggles, that lift the
+  Lynis hardening index: disable core dumps (1.15), stronger password hashing cost
+  in `login.defs` (1.16), verbose SSH logging and no TCPKeepAlive (2.21/2.22),
+  patch-management visibility via apt-show-versions (6.9), process/system
+  accounting with acct + sysstat (11.11), a per-user private temp dir via
+  libpam-tmpdir (13.8), and a console login banner in `/etc/issue` (2.14).
 
 ### Changed
 
