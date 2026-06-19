@@ -40,3 +40,9 @@
       - >-
         3.2 FIDO2 keys accepted:
         {{ 'ok' if ('sk-ssh-ed25519@openssh.com' in (_ssh_effective.stdout | default(''))) else ('FAIL' if ssh_allow_fido2 else 'off') }}
+      - >-
+        2.21 verbose logging:
+        {{ 'ok' if ('loglevel ' ~ (ssh_log_level | lower)) in (_ssh_effective.stdout | default('')) else 'FAIL' }}
+      - >-
+        2.22 TCPKeepAlive disabled:
+        {{ 'ok' if ('tcpkeepalive ' ~ (ssh_tcp_keepalive | lower)) in (_ssh_effective.stdout | default('')) else 'FAIL' }}

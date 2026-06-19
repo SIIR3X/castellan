@@ -6,6 +6,14 @@ Semantic Versioning (https://semver.org).
 
 ## [1.1.0] - Unreleased
 
+### Added
+
+- Six extra hardening measures, on by default with individual toggles, that lift
+  the Lynis hardening index: disable core dumps (1.15), stronger password hashing
+  cost in `login.defs` (1.16), verbose SSH logging and no TCPKeepAlive (2.21/2.22),
+  patch-management visibility via apt-show-versions (6.9), and process/system
+  accounting with acct + sysstat (11.11).
+
 ### Changed
 
 - Castellan now applies **every** measure: hardening profiles

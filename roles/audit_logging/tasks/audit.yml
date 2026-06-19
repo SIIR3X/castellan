@@ -71,6 +71,14 @@
     - /var/log/lastlog
   become: true
 
+- name: "Audit logging | Check process/system accounting packages (11.11)"
+  ansible.builtin.command: "dpkg-query -W -f='${Package} ${Status}\n' acct sysstat"
+  register: _audit_logging_acct
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Audit logging | Report section 11 compliance"
   ansible.builtin.debug:
     msg:
@@ -106,3 +114,7 @@
         11.6 remote syslog forwarding:
         {{ ('ok' if _audit_logging_remote.stat.exists else 'FAIL')
            if audit_logging_remote_syslog else 'off' }}
+      - >-
+        11.11 process/system accounting (acct + sysstat):
+        {{ ('ok' if ((_audit_logging_acct.stdout | default('')).count('install ok installed') == 2) else 'FAIL')
+           if audit_logging_process_accounting else 'off' }}

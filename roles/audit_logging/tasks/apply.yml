@@ -126,3 +126,35 @@
   when:
     - audit_logging_require_timesync | bool
     - (_audit_logging_ntp.stdout | default('') | trim) != 'yes'
+
+# --- 11.11 process & system accounting ---------------------------------------
+- name: "Audit logging | Process and system accounting (11.11)"
+  when: audit_logging_process_accounting | bool
+  block:
+    - name: "Audit logging | Install acct and sysstat (11.11)"
+      ansible.builtin.apt:
+        name: [acct, sysstat]
+        state: present
+        install_recommends: false
+        update_cache: true
+        cache_valid_time: 3600
+      become: true
+
+    - name: "Audit logging | Enable sysstat data collection (11.11)"
+      ansible.builtin.lineinfile:
+        path: /etc/default/sysstat
+        regexp: '^ENABLED='
+        line: 'ENABLED="true"'
+        state: present
+      become: true
+
+    - name: "Audit logging | Enable accounting services (11.11)"
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - acct.service
+        - sysstat.service
+      become: true
+      failed_when: false
