@@ -78,6 +78,17 @@
     - apt-daily-upgrade.timer
   become: true
 
+# --- 6.9 Patch-management visibility -----------------------------------------
+- name: "Updates | Install apt-show-versions for patch tracking (6.9)"
+  ansible.builtin.apt:
+    name: apt-show-versions
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: updates_patch_tracking | bool
+
 # --- 6.8 Pending-update email alerts via apticron (opt-in) -------------------
 - name: "Updates | Pending-update email alerts (6.8)"
   when:

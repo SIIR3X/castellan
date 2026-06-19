@@ -26,6 +26,14 @@
   check_mode: false
   become: true
 
+- name: "Updates | Check apt-show-versions is installed (6.9)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' apt-show-versions
+  register: _updates_aptshow
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Updates | Read the effective allowed origins (6.3)"
   ansible.builtin.command: apt-config dump Unattended-Upgrade::Allowed-Origins
   register: _updates_origins
@@ -74,3 +82,7 @@
         6.8 pending-update alerts (apticron):
         {{ ('ok' if 'install ok installed' in (_updates_apticron.stdout | default('')) else 'FAIL')
            if updates_pending_alert else 'off' }}
+      - >-
+        6.9 patch tracking (apt-show-versions):
+        {{ ('ok' if 'install ok installed' in (_updates_aptshow.stdout | default('')) else 'FAIL')
+           if updates_patch_tracking else 'off' }}

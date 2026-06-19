@@ -50,6 +50,12 @@ AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
 ClientAliveInterval {{ ssh_client_alive_interval }}
 ClientAliveCountMax {{ ssh_client_alive_count_max }}
 
+# 2.21 - verbose logging (records the login key fingerprint).
+LogLevel {{ ssh_log_level }}
+
+# 2.22 - no unencrypted TCP keepalives (ClientAlive above covers dead sessions).
+TCPKeepAlive {{ ssh_tcp_keepalive }}
+
 # 2.15 / 2.16 / 2.20 - misc hardening.
 PermitUserEnvironment no
 StrictModes yes
