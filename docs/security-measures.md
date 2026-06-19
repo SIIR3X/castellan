@@ -74,6 +74,8 @@ itself out of the server:
 | 1.12 | Restrict su to the wheel/sudo group | REC | Via `pam_wheel.so` in `/etc/pam.d/su`. |
 | 1.13 | Remove unused accounts and groups | REC | games, news and similar, depending on usage. |
 | 1.14 | Limit concurrent sessions | OPT | `limits.conf` maxlogins. |
+| 1.15 | Disable core dumps | REC | `limits.conf` hard core 0 + mask `systemd-coredump` (with `fs.suid_dumpable=0`). |
+| 1.16 | Strengthen password hashing cost | REC | `SHA_CRYPT_*_ROUNDS` / `YESCRYPT_COST_FACTOR` in `/etc/login.defs`. |
 
 ## 2. SSH
 
@@ -102,6 +104,8 @@ before any reload.
 | 2.18 | Regenerate or harden host keys | REC | Ed25519 plus RSA 4096; remove weak keys |
 | 2.19 | Strict permissions on keys and config | CRIT | sshd_config 600 root, ~/.ssh 700, authorized_keys 600 |
 | 2.20 | Disable reverse DNS lookup (performance) | OPT | UseDNS no |
+| 2.21 | Verbose authentication logging | REC | LogLevel VERBOSE (records the login key fingerprint) |
+| 2.22 | Disable unencrypted TCP keepalives | REC | TCPKeepAlive no (ClientAlive* already drops dead sessions) |
 
 ## 3. Strong authentication (MFA / 2FA)
 
@@ -157,6 +161,7 @@ Configuration lives in `/etc/fail2ban/jail.local`; never edit `jail.conf`.
 | 6.6 | Verify package authenticity | IMP | Repository GPG; no unsigned repos |
 | 6.7 | Remove unmanaged third-party repos | REC | Audit /etc/apt/sources.list.d/ |
 | 6.8 | Alert on pending updates | OPT | apticron or monitoring |
+| 6.9 | Patch-management visibility | OPT | apt-show-versions (installed vs available per package) |
 
 ## 7. Kernel hardening (sysctl)
 
@@ -238,6 +243,7 @@ File: `/etc/sysctl.d/99-hardening.conf`. Apply with `sysctl --system`.
 | 11.8 | Log connections (wtmp/btmp/lastlog) | REC | Verify they are enabled |
 | 11.9 | Reliable timestamps (see NTP) | IMP | Logs are useless if the clock drifts |
 | 11.10 | Monitor key log files | OPT | Alerting on auth.log, fail2ban.log |
+| 11.11 | Process and system accounting | REC | acct (command history) + sysstat (resource history) |
 
 ## 12. File integrity and anti-malware
 

@@ -78,6 +78,45 @@
   become: true
   when: (accounts_max_logins | int) > 0
 
+- name: "Accounts | Disable core dumps via limits.conf (1.15)"
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-castellan-coredump.conf
+    content: |
+      # Managed by Castellan (1.15) - forbid core dumps (avoid leaking secrets).
+      * hard core 0
+      root hard core 0
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: accounts_disable_core_dumps | bool
+
+- name: "Accounts | Mask systemd-coredump so cores are never captured (1.15)"
+  ansible.builtin.systemd_service:
+    name: systemd-coredump.socket
+    masked: true
+  become: true
+  when: accounts_disable_core_dumps | bool
+  failed_when: false
+
+- name: "Accounts | Strengthen password hashing cost in login.defs (1.16)"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^#?\\s*{{ item.key }}\\b"
+    line: "{{ item.key }}\t{{ item.value }}"
+    state: present
+  loop:
+    - key: SHA_CRYPT_MIN_ROUNDS
+      value: "{{ accounts_sha_crypt_rounds }}"
+    - key: SHA_CRYPT_MAX_ROUNDS
+      value: "{{ accounts_sha_crypt_rounds }}"
+    - key: YESCRYPT_COST_FACTOR
+      value: "{{ accounts_yescrypt_cost_factor }}"
+  loop_control:
+    label: "{{ item.key }}"
+  become: true
+  when: accounts_harden_password_hashing | bool
+
 - name: "Accounts | Restrict su to a group via pam_wheel (1.12)"
   ansible.builtin.lineinfile:
     path: /etc/pam.d/su
