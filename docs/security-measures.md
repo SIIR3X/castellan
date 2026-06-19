@@ -97,7 +97,7 @@ before any reload.
 | 2.11 | Strong crypto only | IMP | Modern KEX, ciphers (chacha20-poly1305, aes256-gcm), ETM MACs; weak algorithms off |
 | 2.12 | Disable weak host-key algorithms | IMP | No DSA or keys under 2048 bits; prefer Ed25519 |
 | 2.13 | Keepalive / disconnect dead sessions | REC | ClientAliveInterval 300, ClientAliveCountMax 2 |
-| 2.14 | Legal warning banner | OPT | Banner /etc/issue.net |
+| 2.14 | Legal warning banner | OPT | Banner /etc/issue.net (network) + /etc/issue (console) |
 | 2.15 | Disable PermitUserEnvironment | REC | PermitUserEnvironment no |
 | 2.16 | Strict permission mode | REC | StrictModes yes |
 | 2.17 | Limit SSH to IPv4 / a specific listen address | OPT | AddressFamily inet, ListenAddress if relevant |
@@ -267,6 +267,7 @@ File: `/etc/sysctl.d/99-hardening.conf`. Apply with `sysctl --system`.
 | 13.5 | Delay between attempts | REC | pam_faildelay |
 | 13.6 | Prevent immediate reuse | REC | See pwhistory |
 | 13.7 | Consistency with /etc/login.defs | REC | Min/max age, warn age |
+| 13.8 | Per-user private temp directory | REC | libpam-tmpdir (0700 $TMP/$TMPDIR per login) |
 
 ## 14. Network
 
