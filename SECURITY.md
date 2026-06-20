@@ -6,13 +6,13 @@ responsibly.
 
 ## Supported versions
 
-Fixes are published for the latest released version. Until 1.0.0 the project is
-pre-release and only the most recent 0.x line is maintained.
+Fixes are published for the latest released version. The 1.x line is the
+maintained series; earlier pre-release 0.x versions no longer receive fixes.
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x | yes |
-| older | no |
+| 1.x | yes |
+| < 1.0 | no |
 
 If you installed via apt, `sudo apt update && sudo apt upgrade` keeps you on a
 supported version.
