@@ -4,7 +4,7 @@ All notable changes to Castellan are documented here. The format follows
 Keep a Changelog (https://keepachangelog.com), and the project aims to follow
 Semantic Versioning (https://semver.org).
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-06-20
 
 ### Added
 
@@ -42,8 +42,6 @@ Semantic Versioning (https://semver.org).
 
 - `whiptail` recommendation from the `.deb` package metadata (the wizard no
   longer uses it).
-
-## [1.0.0] - 2026-06-18
 
 ## [1.0.0] - 2026-06-18
 
