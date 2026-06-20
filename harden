@@ -47,7 +47,7 @@ ok()   { printf '%b\n' "${C_GRN}[+]${C_RST} $*"; }
 warn() { printf '%b\n' "${C_YEL}[!]${C_RST} $*" >&2; }
 die()  { printf '%b\n' "${C_RED}[x]${C_RST} $*" >&2; exit 1; }
 
-# Interactive config library (wizard + measure selector + catalog).
+# Interactive config library (host-config wizard; no measure selector).
 # shellcheck source=lib/castellan-config.sh
 [ -f "${REPO_ROOT}/lib/castellan-config.sh" ] && . "${REPO_ROOT}/lib/castellan-config.sh"
 

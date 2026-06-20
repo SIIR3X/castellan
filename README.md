@@ -38,9 +38,9 @@ Two principles drive the design:
   deviations without changing anything, and an apply path that remediates them.
   A post-run Lynis scan gives you a measurable hardening index.
 
-Castellan applies **every** measure - there is no profile to pick. An
-interactive selector lets you turn a specific role or measure off per host,
-with no manual file editing required.
+Castellan applies **every** measure - there is no profile to pick. To skip a
+specific role or measure, flip its toggle off per host (`enable_<role>: false`)
+or per run (`-e enable_<role>=false`); no manual inventory editing is required.
 
 ### What it hardens
 
@@ -74,7 +74,7 @@ the configuration model are described in
 - Linux/macOS with **Ansible core 2.16+** and **Python 3**
 - An SSH key loaded in your `ssh-agent` (Castellan never reads or copies private
   keys)
-- No extra tooling: the setup wizard and selector are plain terminal prompts
+- No extra tooling: the setup wizard is plain terminal prompts
   (no whiptail or other TUI dependency)
 
 **Target server:**
