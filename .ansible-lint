@@ -1,0 +1,11 @@
+---
+# ansible-lint configuration for Castellan.
+#
+# These paths hold gitignored, generated, or per-host user data - not project
+# source. Excluding them keeps a local `make check` in sync with CI, where the
+# checkout has none of these files (host_vars/ ships only its .gitkeep, and the
+# template lives at inventory/host_vars.example.yml, outside this directory).
+exclude_paths:
+  - inventory/host_vars/
+  - reports/
+  - dist/
