@@ -9,29 +9,20 @@
   gather_facts: true
   become: true
   vars:
+    # Connect on the port chosen by Play 0: the initial port on a first apply
+    # (the ssh role only changes it at the very end of this play), or the
+    # already-hardened port when re-running an already-hardened host. Falls back
+    # to the initial port when preflight did not run.
     ansible_user: "{{ admin_user }}"
-    ansible_port: "{{ initial_port | default(22) }}"
+    ansible_port: "{{ castellan_bootstrap_port | default(initial_port | default(22)) }}"
 
   pre_tasks:
-    # Tagged 'always' so the profile check and announce run on targeted
-    # --tags/--only runs too.
-    - name: "Harden | Validate the hardening profile name"
-      ansible.builtin.assert:
-        that:
-          - hardening_profile | default('standard') in castellan_profiles
-        fail_msg: >-
-          Unknown hardening_profile '{{ hardening_profile }}'. Valid profiles:
-          {{ castellan_profiles.keys() | list | join(', ') }}.
-        quiet: true
-      tags: [always]
-
+    # Tagged 'always' so the announce runs on targeted --tags/--only runs too.
     - name: "Harden | Announce run parameters"
       ansible.builtin.debug:
         msg: >-
-          [harden] mode={{ castellan_mode | default('apply') }},
-          profile={{ hardening_profile | default('standard') }},
-          roles={{ castellan_active_roles | join(', ') }}.
-          Roles run in lockout-safe order.
+          [harden] mode={{ castellan_mode | default('apply') }}. All measures
+          applied; roles run in lockout-safe order.
       tags: [always]
 
   roles:

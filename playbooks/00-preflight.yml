@@ -1,0 +1,88 @@
+---
+# Play 0 - Preflight (select the working SSH identity).
+#
+# Anti-lockout helper: decides whether the rest of the run should connect with
+# the INITIAL credentials (fresh host, admin not created yet) or directly as the
+# already-created admin (a host Castellan has already hardened, where the
+# initial account is now locked out by AllowGroups / PermitRootLogin no).
+#
+# It only probes (a read-only `true` over SSH); it never changes anything and
+# always falls back to the initial credentials, so the worst case is exactly the
+# previous behaviour. The facts it sets are consumed by Play 1 (bootstrap) and
+# Play 2 (verify-access).
+- name: "Castellan | Play 0 - Detect the working SSH identity"
+  hosts: vps
+  gather_facts: false
+  become: false
+
+  tasks:
+    # Is the admin reachable on the hardened port? (host already hardened)
+    - name: "Preflight | Probe the admin on the hardened SSH port"
+      ansible.builtin.raw: "true"
+      vars:
+        ansible_user: "{{ admin_user | default('') }}"
+        ansible_port: "{{ ssh_port | default(22) }}"
+      register: _pf_admin_ssh
+      changed_when: false
+      failed_when: false
+      ignore_unreachable: true
+      # Read-only probe: must run even during an audit (--check), otherwise the
+      # identity cannot be detected when re-auditing an already-hardened host.
+      check_mode: false
+      when: admin_user | default('') | length > 0
+      tags: [always]
+
+    # Is the admin reachable on the initial port? (bootstrapped but not yet
+    # hardened, or a deployment that never changed the port). Only needed when
+    # the two ports differ - otherwise the probe above already answered it.
+    - name: "Preflight | Probe the admin on the initial SSH port"
+      ansible.builtin.raw: "true"
+      vars:
+        ansible_user: "{{ admin_user | default('') }}"
+        ansible_port: "{{ initial_port | default(22) }}"
+      register: _pf_admin_init
+      changed_when: false
+      failed_when: false
+      ignore_unreachable: true
+      check_mode: false
+      when:
+        - admin_user | default('') | length > 0
+        - (ssh_port | default(22)) != (initial_port | default(22))
+      tags: [always]
+
+    - name: "Preflight | Resolve which identity is reachable"
+      ansible.builtin.set_fact:
+        _pf_admin_on_ssh: >-
+          {{ (_pf_admin_ssh.rc | default(1) == 0)
+             and (not (_pf_admin_ssh.unreachable | default(false))) }}
+        _pf_admin_on_init: >-
+          {{ (_pf_admin_init.rc | default(1) == 0)
+             and (not (_pf_admin_init.unreachable | default(false))) }}
+      tags: [always]
+
+    # The admin already works -> connect as it (on whichever port answered).
+    # Otherwise keep the initial credentials so a fresh host still bootstraps.
+    - name: "Preflight | Select the bootstrap and verify connection identity"
+      ansible.builtin.set_fact:
+        castellan_admin_ready: "{{ _pf_admin_on_ssh or _pf_admin_on_init }}"
+        castellan_bootstrap_user: >-
+          {{ admin_user
+             if (_pf_admin_on_ssh or _pf_admin_on_init)
+             else (initial_user | default('root')) }}
+        castellan_bootstrap_port: >-
+          {{ (ssh_port | default(22)) if _pf_admin_on_ssh
+             else (initial_port | default(22)) }}
+        castellan_verify_port: >-
+          {{ (ssh_port | default(22)) if _pf_admin_on_ssh
+             else (initial_port | default(22)) }}
+      tags: [always]
+
+    - name: "Preflight | Announce the chosen identity"
+      ansible.builtin.debug:
+        msg: >-
+          Connecting as
+          {{ castellan_bootstrap_user }}@{{ inventory_hostname }}:{{ castellan_bootstrap_port }}
+          ({{ 'admin already reachable - host previously hardened'
+              if castellan_admin_ready
+              else 'initial credentials - first contact' }})
+      tags: [always]

@@ -9,9 +9,12 @@
   gather_facts: false
   become: true
   vars:
-    # Connect as the host-provided account, on the initial port.
-    ansible_user: "{{ initial_user | default('root') }}"
-    ansible_port: "{{ initial_port | default(22) }}"
+    # Identity chosen by Play 0: the initial account on a fresh host, or the
+    # already-created admin when re-running against an already-hardened host
+    # (where the initial account is locked out). Falls back to the initial
+    # credentials if preflight did not run (e.g. this play alone).
+    ansible_user: "{{ castellan_bootstrap_user | default(initial_user | default('root')) }}"
+    ansible_port: "{{ castellan_bootstrap_port | default(initial_port | default(22)) }}"
 
   roles:
     # Establish the run-wide backup timestamp/directory first.

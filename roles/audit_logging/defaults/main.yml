@@ -32,3 +32,7 @@ audit_logging_immutable: false
 # @@ = TCP delivery; set the target to "host:port".
 audit_logging_remote_syslog: false
 audit_logging_syslog_target: ""
+
+# --- 11.11 process & system accounting (acct for command history, sysstat for
+# resource history) - gives post-incident visibility into what ran and when.
+audit_logging_process_accounting: true

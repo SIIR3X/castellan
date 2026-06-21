@@ -18,7 +18,7 @@ Control machine (where you run Castellan):
 | Ansible | core 2.16 or newer (`ansible-core` or `ansible`) |
 | Python | Python 3 |
 | SSH client | OpenSSH, with your admin key loaded in `ssh-agent` |
-| whiptail | Optional. Used for the interactive menus; a plain text prompt is used when it is absent. |
+| (none extra) | The init wizard is plain terminal prompts; no whiptail or other TUI dependency. |
 
 Castellan never reads or copies your private keys: later connections go through
 your `ssh-agent`.

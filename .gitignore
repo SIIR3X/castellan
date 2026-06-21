@@ -27,6 +27,11 @@ fact_cache/
 # Local test harness secrets (disposable container keys) - never commit
 test/secrets/
 
+# Per-host configs are personal (real IPs, key paths) - never commit them.
+# The tracked template is inventory/host_vars.example.yml; the dir is kept by
+# its .gitkeep, and `harden init` writes inventory/host_vars/<host>.yml locally.
+inventory/host_vars/*.yml
+
 # Generated reports (folder tracked via .gitkeep, contents ignored)
 reports/*
 !reports/.gitkeep
