@@ -1,0 +1,16 @@
+---
+# Galaxy collections required by Castellan's roles and playbooks.
+#
+# ansible-core (e.g. the pip install used in CI) ships no bundled collections,
+# so these must be installed explicitly:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# Locally the apt 'ansible' package already provides them, which is why
+# `make check` passes without this step on a workstation.
+collections:
+  # community.general.ufw, community.general.pamd
+  - name: community.general
+    version: ">=8.3.0"
+  # ansible.posix.authorized_key, ansible.posix.mount
+  - name: ansible.posix
+    version: ">=1.5.4"
