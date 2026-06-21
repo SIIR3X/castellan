@@ -45,3 +45,8 @@ pam_faildelay_delay: 4000000       # microseconds (4s)
 
 # --- 13.2 Strong hashing - audited; remediated only if neither value is set ---
 pam_hash_acceptable: [yescrypt, sha512]
+
+# --- 13.8 Per-user private temp dir (libpam-tmpdir) ---------------------------
+# Gives each login its own 0700 $TMP/$TMPDIR, on top of the hardened /tmp mount
+# (filesystem 9.1). Installing the package enables it via pam-auth-update.
+pam_tmpdir: true

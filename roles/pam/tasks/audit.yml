@@ -10,6 +10,14 @@
   check_mode: false
   become: true
 
+- name: "PAM | Check whether libpam-tmpdir is installed (13.8)"
+  ansible.builtin.command: dpkg-query -W -f='${Status}' libpam-tmpdir
+  register: _pam_tmpdir_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "PAM | Read PAM and security files"
   ansible.builtin.command: "cat {{ item }}"
   register: _pam_files
@@ -59,6 +67,10 @@
         13.5 pam_faildelay in common-auth:
         {{ 'ok' if 'pam_faildelay.so' in _pam_auth.auth
            else ('skipped' if not pam_faildelay_enable | bool else 'FAIL') }}
+      - >-
+        13.8 per-user temp dir (libpam-tmpdir):
+        {{ ('ok' if 'install ok installed' in (_pam_tmpdir_pkg.stdout | default('')) else 'FAIL')
+           if pam_tmpdir else 'off' }}
   vars:
     _pam_auth: >-
       {{ {

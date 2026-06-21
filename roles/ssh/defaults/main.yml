@@ -31,6 +31,14 @@ ssh_allow_agent_forwarding: "no"
 ssh_allow_tcp_forwarding: "no"
 ssh_use_dns: "no"
 
+# 2.21 - sshd log verbosity. VERBOSE also logs the key fingerprint used to log
+# in (useful forensics) without exposing secrets.
+ssh_log_level: VERBOSE
+
+# 2.22 - TCPKeepAlive sends UNencrypted keepalives (spoofable); the encrypted
+# ClientAlive* (2.13) already drops dead sessions, so turn this off.
+ssh_tcp_keepalive: "no"
+
 # 2.18 - remove weak/legacy host keys (ecdsa, dsa); ed25519 + rsa are kept.
 ssh_remove_weak_host_keys: true
 
