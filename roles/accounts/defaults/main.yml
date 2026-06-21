@@ -52,3 +52,13 @@ accounts_unused_users: [games, gnats, irc, list, news, uucp]
 
 # 1.14 - cap concurrent logins per user via limits.conf (OPT). 0 = disabled.
 accounts_max_logins: 0
+
+# 1.15 - disable core dumps (limits.conf hard core 0 + mask systemd-coredump).
+# Pairs with fs.suid_dumpable=0 (sysctl 7.15) to stop secrets leaking to disk.
+accounts_disable_core_dumps: true
+
+# 1.16 - password hashing cost in login.defs. SHA_CRYPT_*_ROUNDS apply when the
+# hash is SHA512; YESCRYPT_COST_FACTOR applies to Ubuntu 24.04's yescrypt default.
+accounts_harden_password_hashing: true
+accounts_sha_crypt_rounds: 100000
+accounts_yescrypt_cost_factor: 7

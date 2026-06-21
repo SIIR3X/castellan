@@ -11,82 +11,66 @@
 castellan_mode: apply
 
 # ---------------------------------------------------------------------------
-# Hardening profile - selects which roles run.
-#   minimal  : the lockout-critical spine + security updates + reporting
-#   standard : minimal + all low-risk hardening roles  (recommended default)
-#   paranoid : standard + the opt-in roles (confinement, integrity, boot)
-# Override per run with `-e hardening_profile=paranoid` or per host in host_vars.
-# An unknown profile name falls back to standard (the harden play also asserts).
+# Role toggles. There are no profiles: Castellan applies EVERY measure. Each
+# role runs by default; flip a toggle off per host (host_vars) or per run
+# (-e enable_X=false) only to deliberately skip one.
+#
+# mfa is the sole exception (off by default): it needs per-user TOTP enrollment,
+# an external prerequisite, so enable it explicitly with enable_mfa: true.
 # ---------------------------------------------------------------------------
-hardening_profile: standard
-
-castellan_profiles:
-  minimal:
-    - accounts
-    - ssh
-    - firewall
-    - fail2ban
-    - updates
-    - compliance
-  standard:
-    - accounts
-    - ssh
-    - firewall
-    - fail2ban
-    - updates
-    - sysctl
-    - pam
-    - audit_logging
-    - services
-    - network
-    - filesystem
-    - cron
-    - compliance
-  paranoid:
-    - accounts
-    - ssh
-    - firewall
-    - fail2ban
-    - updates
-    - sysctl
-    - pam
-    - audit_logging
-    - services
-    - network
-    - filesystem
-    - cron
-    - compliance
-    - confinement
-    - integrity
-    - boot
-
-# Role set selected by the active profile (falls back to standard for an unknown
-# profile name).
-castellan_active_roles: "{{ castellan_profiles[hardening_profile] | default(castellan_profiles['standard']) }}"
+enable_accounts:      true
+enable_ssh:           true
+enable_firewall:      true
+enable_fail2ban:      true
+enable_updates:       true
+enable_sysctl:        true
+enable_pam:           true
+enable_audit_logging: true
+enable_services:      true
+enable_network:       true
+enable_confinement:   true
+enable_filesystem:    true
+enable_cron:          true
+enable_integrity:     true
+enable_boot:          true
+enable_compliance:    true
+enable_mfa:           false   # opt-in: needs TOTP enrollment (external prereq)
 
 # ---------------------------------------------------------------------------
-# Module toggles - each role runs when its name is in the active profile above.
-# Override any of these per host (host_vars) or per run (-e enable_X=true|false)
-# to force a role on/off regardless of the profile. mfa is in NO profile (it
-# needs TOTP enrollment), so enable it explicitly with enable_mfa: true.
+# Opt-in measures - all ON (Castellan applies every measure). Override to false
+# per host to skip a specific one. Measures that REQUIRE an external value
+# (remote syslog target, GRUB password hash, alert email) stay inert until that
+# value is provided further down / in host_vars.
 # ---------------------------------------------------------------------------
-enable_accounts:      "{{ 'accounts' in castellan_active_roles }}"
-enable_ssh:           "{{ 'ssh' in castellan_active_roles }}"
-enable_mfa:           "{{ 'mfa' in castellan_active_roles }}"
-enable_firewall:      "{{ 'firewall' in castellan_active_roles }}"
-enable_fail2ban:      "{{ 'fail2ban' in castellan_active_roles }}"
-enable_updates:       "{{ 'updates' in castellan_active_roles }}"
-enable_sysctl:        "{{ 'sysctl' in castellan_active_roles }}"
-enable_confinement:   "{{ 'confinement' in castellan_active_roles }}"
-enable_filesystem:    "{{ 'filesystem' in castellan_active_roles }}"
-enable_services:      "{{ 'services' in castellan_active_roles }}"
-enable_audit_logging: "{{ 'audit_logging' in castellan_active_roles }}"
-enable_integrity:     "{{ 'integrity' in castellan_active_roles }}"
-enable_pam:           "{{ 'pam' in castellan_active_roles }}"
-enable_network:       "{{ 'network' in castellan_active_roles }}"
-enable_boot:          "{{ 'boot' in castellan_active_roles }}"
-enable_cron:          "{{ 'cron' in castellan_active_roles }}"
-enable_compliance:    "{{ 'compliance' in castellan_active_roles }}"
+accounts_remove_unused:       true
+accounts_max_logins:          10
+ssh_banner:                   true
+ssh_allow_fido2:              true
+ufw_block_icmp_echo:          true
+updates_pending_alert:        true      # degrades to syslog when no notify_email
+sysctl_restrict_perf:         true
+sysctl_disable_userns:        true
+sysctl_disable_module_load:   true      # (!) locks kernel module loading
+filesystem_harden_var_tmp:    true
+filesystem_harden_home:       true
+filesystem_disable_usb:       true
+filesystem_enable_quotas:     true
+services_mask:                true
+services_remove_compilers:    true      # (!) removes compilers/build tools
+services_disable_ipv6:        true      # (!) disables IPv6 entirely (see below)
+audit_logging_immutable:      true      # (!) immutable audit rules (needs reboot)
+network_disable_wireless:     true
+network_egress_filter:        true      # (!) default-deny outbound (DNS/HTTP/HTTPS/NTP allowed)
+boot_disable_ctrl_alt_del:    true
+boot_harden_kernel_cmdline:   true
+integrity_rkhunter:           true
+integrity_clamav:             true      # heavy (antivirus DB)
+compliance_alerting:          true      # degrades to syslog when no notify_email
+
+# Measures requiring an external value - inert until set (host_vars / wizard).
+audit_logging_syslog_target:  ""        # "host:port" enables remote syslog (11.6)
+boot_grub_password_hash:      ""        # grub.pbkdf2 hash enables GRUB password (15.1)
+notify_email:                 ""        # recipient for update/login alerts
 
 # ---------------------------------------------------------------------------
 # Sensible defaults (overridable per host).
@@ -98,20 +82,21 @@ admin_shell:        /bin/bash
 admin_extra_groups: []
 sudo_mode:          nopasswd
 
-# SSH
-ssh_port:          22
-ssh_allow_groups:  [ssh-users]
-ssh_permit_root:   "no"
-ssh_password_auth: "no"
+# SSH. address_family is inet (IPv4-only) for coherence with services_disable_ipv6
+# above: a dual-stack bind would fail once the IPv6 stack is disabled.
+ssh_port:           22
+ssh_allow_groups:   [ssh-users]
+ssh_permit_root:    "no"
+ssh_password_auth:  "no"
+ssh_address_family: inet
 
-# Firewall (ufw)
+# Firewall (ufw). IPv6 filtering off to match services_disable_ipv6.
 ufw_default_incoming: deny
 ufw_default_outgoing: allow
 ufw_allowed_ports:    []
 ufw_rate_limit_ssh:   true
 ufw_logging:          "on"
-ufw_ipv6:             true
-ufw_block_icmp_echo:  false
+ufw_ipv6:             false
 ufw_antispoof:        true
 
 # Fail2ban

@@ -74,6 +74,8 @@ itself out of the server:
 | 1.12 | Restrict su to the wheel/sudo group | REC | Via `pam_wheel.so` in `/etc/pam.d/su`. |
 | 1.13 | Remove unused accounts and groups | REC | games, news and similar, depending on usage. |
 | 1.14 | Limit concurrent sessions | OPT | `limits.conf` maxlogins. |
+| 1.15 | Disable core dumps | REC | `limits.conf` hard core 0 + mask `systemd-coredump` (with `fs.suid_dumpable=0`). |
+| 1.16 | Strengthen password hashing cost | REC | `SHA_CRYPT_*_ROUNDS` / `YESCRYPT_COST_FACTOR` in `/etc/login.defs`. |
 
 ## 2. SSH
 
@@ -95,13 +97,15 @@ before any reload.
 | 2.11 | Strong crypto only | IMP | Modern KEX, ciphers (chacha20-poly1305, aes256-gcm), ETM MACs; weak algorithms off |
 | 2.12 | Disable weak host-key algorithms | IMP | No DSA or keys under 2048 bits; prefer Ed25519 |
 | 2.13 | Keepalive / disconnect dead sessions | REC | ClientAliveInterval 300, ClientAliveCountMax 2 |
-| 2.14 | Legal warning banner | OPT | Banner /etc/issue.net |
+| 2.14 | Legal warning banner | OPT | Banner /etc/issue.net (network) + /etc/issue (console) |
 | 2.15 | Disable PermitUserEnvironment | REC | PermitUserEnvironment no |
 | 2.16 | Strict permission mode | REC | StrictModes yes |
 | 2.17 | Limit SSH to IPv4 / a specific listen address | OPT | AddressFamily inet, ListenAddress if relevant |
 | 2.18 | Regenerate or harden host keys | REC | Ed25519 plus RSA 4096; remove weak keys |
 | 2.19 | Strict permissions on keys and config | CRIT | sshd_config 600 root, ~/.ssh 700, authorized_keys 600 |
 | 2.20 | Disable reverse DNS lookup (performance) | OPT | UseDNS no |
+| 2.21 | Verbose authentication logging | REC | LogLevel VERBOSE (records the login key fingerprint) |
+| 2.22 | Disable unencrypted TCP keepalives | REC | TCPKeepAlive no (ClientAlive* already drops dead sessions) |
 
 ## 3. Strong authentication (MFA / 2FA)
 
@@ -157,6 +161,7 @@ Configuration lives in `/etc/fail2ban/jail.local`; never edit `jail.conf`.
 | 6.6 | Verify package authenticity | IMP | Repository GPG; no unsigned repos |
 | 6.7 | Remove unmanaged third-party repos | REC | Audit /etc/apt/sources.list.d/ |
 | 6.8 | Alert on pending updates | OPT | apticron or monitoring |
+| 6.9 | Patch-management visibility | OPT | apt-show-versions (installed vs available per package) |
 
 ## 7. Kernel hardening (sysctl)
 
@@ -238,6 +243,7 @@ File: `/etc/sysctl.d/99-hardening.conf`. Apply with `sysctl --system`.
 | 11.8 | Log connections (wtmp/btmp/lastlog) | REC | Verify they are enabled |
 | 11.9 | Reliable timestamps (see NTP) | IMP | Logs are useless if the clock drifts |
 | 11.10 | Monitor key log files | OPT | Alerting on auth.log, fail2ban.log |
+| 11.11 | Process and system accounting | REC | acct (command history) + sysstat (resource history) |
 
 ## 12. File integrity and anti-malware
 
@@ -261,6 +267,7 @@ File: `/etc/sysctl.d/99-hardening.conf`. Apply with `sysctl --system`.
 | 13.5 | Delay between attempts | REC | pam_faildelay |
 | 13.6 | Prevent immediate reuse | REC | See pwhistory |
 | 13.7 | Consistency with /etc/login.defs | REC | Min/max age, warn age |
+| 13.8 | Per-user private temp directory | REC | libpam-tmpdir (0700 $TMP/$TMPDIR per login) |
 
 ## 14. Network
 
@@ -319,29 +326,30 @@ On a VPS the console is managed by the host, so most of these are optional.
 
 ## Module summary
 
-Each module pairs an audit path with an apply path. The profile column shows the
-lowest profile that runs the role; see [architecture.md](./architecture.md) for the
-exact profile definitions.
+Each module pairs an audit path with an apply path. Castellan runs every module
+by default; the CRIT/IMP/REC/OPT labels on individual measures above indicate
+importance, not whether they run. `mfa` is the only module off by default (it
+needs per-user TOTP enrollment).
 
-| Module | Category | Lockout risk | Profile |
+| Module | Category | Lockout risk | Default |
 |--------|----------|--------------|---------|
-| accounts | Accounts and auth | medium | minimal |
-| ssh | SSH | high | minimal |
-| firewall | ufw | high | minimal |
-| fail2ban | Anti-bruteforce | medium (self-ban) | minimal |
-| updates | Patch management | - | minimal |
-| compliance | Lynis and reporting | - | minimal |
-| sysctl | Kernel | low | standard |
-| pam | Passwords | medium | standard |
-| audit_logging | auditd and logs | - | standard |
-| services | Minimization | medium | standard |
-| network | Network and NTP | low | standard |
-| filesystem | FS and mounts | low | standard |
-| cron | Scheduled tasks | - | standard |
-| confinement | AppArmor and systemd | low | paranoid |
-| integrity | AIDE and debsums | - | paranoid |
-| boot | GRUB | low | paranoid |
-| mfa | MFA / 2FA | medium | opt-in only |
+| accounts | Accounts and auth | medium | on |
+| ssh | SSH | high | on |
+| firewall | ufw | high | on |
+| fail2ban | Anti-bruteforce | medium (self-ban) | on |
+| updates | Patch management | - | on |
+| compliance | Lynis and reporting | - | on |
+| sysctl | Kernel | low | on |
+| pam | Passwords | medium | on |
+| audit_logging | auditd and logs | - | on |
+| services | Minimization | medium | on |
+| network | Network and NTP | low | on |
+| filesystem | FS and mounts | low | on |
+| cron | Scheduled tasks | - | on |
+| confinement | AppArmor and systemd | low | on |
+| integrity | AIDE and debsums | - | on |
+| boot | GRUB | low | on |
+| mfa | MFA / 2FA | medium | off (needs TOTP enrollment) |
 | backup_config | Backups | - | always |
 
 ## On "100% secure"

@@ -56,6 +56,21 @@
   check_mode: false
   become: true
 
+- name: "Accounts | Read the runtime hard core-dump limit (1.15)"
+  ansible.builtin.command: bash -c "ulimit -H -c"
+  register: _accounts_core_limit
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Accounts | Read password hashing settings from login.defs (1.16)"
+  ansible.builtin.command: "grep -E '^(SHA_CRYPT_MIN_ROUNDS|YESCRYPT_COST_FACTOR)' /etc/login.defs"
+  register: _accounts_hashing
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: true
+
 - name: "Accounts | Report account compliance"
   ansible.builtin.debug:
     msg:
@@ -83,3 +98,11 @@
       - >-
         1.14 concurrent-login cap:
         {{ 'off' if (accounts_max_logins | int) == 0 else (accounts_max_logins | string) }}
+      - >-
+        1.15 core dumps disabled:
+        {{ ('ok' if (_accounts_core_limit.stdout | default('') | trim) == '0' else 'FAIL')
+           if accounts_disable_core_dumps else 'off' }}
+      - >-
+        1.16 password hashing cost set:
+        {{ ('ok' if (_accounts_hashing.stdout | default('') | length) > 0 else 'FAIL')
+           if accounts_harden_password_hashing else 'off' }}

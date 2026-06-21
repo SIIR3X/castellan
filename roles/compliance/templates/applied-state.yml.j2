@@ -2,7 +2,6 @@
 # The configuration itself is versioned in git; this documents what ran here.
 castellan_applied: true
 applied_at_utc: "{{ compliance_stamp }}"
-hardening_profile: "{{ hardening_profile | default('standard') }}"
 castellan_mode: "{{ castellan_mode | default('apply') }}"
 lynis_hardening_index: "{{ compliance_hardening_index | default('unknown') }}"
 enabled_roles:

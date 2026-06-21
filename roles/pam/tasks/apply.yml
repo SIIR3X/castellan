@@ -174,3 +174,16 @@
     state: before
   become: true
   when: pam_faillock_enable | bool
+
+# --- 13.8 Per-user private temp dir ------------------------------------------
+# The package's postinst runs pam-auth-update (non-interactive) to add
+# pam_tmpdir to common-session, so installing it is enough to enable it.
+- name: "PAM | Install libpam-tmpdir for per-user temp dirs (13.8)"
+  ansible.builtin.apt:
+    name: libpam-tmpdir
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: pam_tmpdir | bool
